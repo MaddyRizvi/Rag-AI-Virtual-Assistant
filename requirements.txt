@@ -5,7 +5,8 @@ langchain-community==0.3.1
 
 # Serving & tracing
 langserve==0.1.1
-langsmith==0.1.70
+langsmith==0.1.125
+ +++++++ REPLACE
 
 # LLM & Embeddings providers
 openai>=1.40.0
