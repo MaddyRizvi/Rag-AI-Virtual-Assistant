@@ -4,7 +4,7 @@ langchain-core==0.3.8
 langchain-community==0.3.1
 
 # Serving & tracing
-langserve==0.1.1
+langserve>=0.2.0
 langsmith==0.1.125
 
 # LLM & Embeddings providers
