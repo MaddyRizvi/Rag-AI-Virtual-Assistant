@@ -18,6 +18,9 @@ pinecone-client>=4.0.0
 fastapi>=0.110.0
 uvicorn>=0.30.0
 
+# Streamlit web interface
+streamlit>=1.28.0
+
 # Environment management
 python-dotenv>=1.0.1
 
