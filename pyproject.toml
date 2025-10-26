@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "App-Pinecone"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [
+    { include = "app" },
+]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+uvicorn = "^0.23.2"
+langserve = {extras = ["server"], version = ">=0.0.30"}
+pydantic = "<2"
+pinecone-client = "3.0.0.dev8"
+langchain-community = "0.0.12"
+cohere = "4.47.0"
+openai = "^2.6.0"
+jupyter = "^1.1.1"
+python-dotenv = "^1.1.1"
+langchain-text-splitters = "^0.0.1"
+langchain-docarray = "^0.0.3"
+pypdf = "^3.17.4"
+python-multipart = "^0.0.6"
+aiofiles = "^23.2.1"
+streamlit = "^1.28.0"
+
+
+[tool.poetry.group.dev.dependencies]
+langchain-cli = ">=0.0.15"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
