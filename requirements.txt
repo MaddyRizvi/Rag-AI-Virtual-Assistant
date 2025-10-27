@@ -14,6 +14,7 @@ langchain-cohere>=0.1.0
 
 # Vector database
 pinecone-client>=4.0.0
+langchain-pinecone>=0.1.0
 
 # Web framework for LangServe
 fastapi>=0.110.0
