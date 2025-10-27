@@ -20,7 +20,25 @@ class DocumentProcessor:
         
         # Validate required environment variables
         if not self.pinecone_api_key:
-            raise ValueError("PINECONE_API_KEY environment variable is required")
+            error_msg = """
+            ❌ PINECONE_API_KEY environment variable is required!
+            
+            To fix this issue:
+            
+            1. In Azure Portal:
+               - Go to your Web App
+               - Click on "Configuration" 
+               - Under "Application settings", click "New application setting"
+               - Name: PINECONE_API_KEY
+               - Value: your_pinecone_api_key_here
+               - Click OK, then Save
+            
+            2. Or locally, add to your .env file:
+               PINECONE_API_KEY=your_pinecone_api_key_here
+            
+            3. Get your API key from: https://app.pinecone.io/
+            """
+            raise ValueError(error_msg)
         
         self.pinecone_client = PineconeClient(
             api_key=self.pinecone_api_key,
@@ -39,8 +57,30 @@ class DocumentProcessor:
             
             # Validate required Azure OpenAI variables
             if not azure_endpoint or not azure_api_key:
+                error_msg = """
+                ❌ Azure OpenAI credentials are missing!
+                
+                To fix this issue:
+                
+                1. In Azure Portal:
+                   - Go to your Web App
+                   - Click on "Configuration"
+                   - Under "Application settings", add these settings:
+                   - Name: AZ_OPENAI_ENDPOINT
+                     Value: your_azure_openai_endpoint_here
+                   - Name: AZ_OPENAI_API_KEY
+                     Value: your_azure_openai_api_key_here
+                   - Click OK, then Save
+                
+                2. Or locally, add to your .env file:
+                   AZ_OPENAI_ENDPOINT=your_azure_openai_endpoint_here
+                   AZ_OPENAI_API_KEY=your_azure_openai_api_key_here
+                
+                3. Get your Azure OpenAI credentials from:
+                   - Azure Portal -> Azure OpenAI -> Your resource -> Keys and Endpoint
+                """
                 print("Azure OpenAI credentials not found, falling back to Cohere embeddings")
-                raise ValueError("Azure OpenAI credentials missing")
+                raise ValueError(error_msg)
             
             self.embeddings = AzureOpenAIEmbeddings(
                 azure_deployment=azure_deployment,

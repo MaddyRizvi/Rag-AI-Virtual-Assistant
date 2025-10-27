@@ -75,7 +75,32 @@ azure_api_version = os.environ.get("AZ_OPENAI_API_VERSION", "2024-12-01-preview"
 
 # Validate required Azure OpenAI variables
 if not azure_endpoint or not azure_api_key:
-    raise ValueError("Azure OpenAI credentials (AZ_OPENAI_ENDPOINT and AZ_OPENAI_API_KEY) are required")
+    error_msg = """
+    ❌ Azure OpenAI credentials are missing!
+    
+    To fix this issue:
+    
+    1. In Azure Portal:
+       - Go to your Web App
+       - Click on "Configuration"
+       - Under "Application settings", add these settings:
+       - Name: AZ_OPENAI_ENDPOINT
+         Value: your_azure_openai_endpoint_here
+       - Name: AZ_OPENAI_API_KEY
+         Value: your_azure_openai_api_key_here
+       - Name: AZ_OPENAI_CHAT_DEPLOYMENT
+         Value: gpt-4o (or your deployment name)
+       - Click OK, then Save
+    
+    2. Or locally, add to your .env file:
+       AZ_OPENAI_ENDPOINT=your_azure_openai_endpoint_here
+       AZ_OPENAI_API_KEY=your_azure_openai_api_key_here
+       AZ_OPENAI_CHAT_DEPLOYMENT=gpt-4o
+    
+    3. Get your Azure OpenAI credentials from:
+       - Azure Portal -> Azure OpenAI -> Your resource -> Keys and Endpoint
+    """
+    raise ValueError(error_msg)
 
 model = AzureChatOpenAI(
     temperature=0,
