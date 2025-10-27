@@ -10,6 +10,7 @@ langsmith==0.1.125
 # LLM & Embeddings providers
 openai>=1.40.0
 cohere==5.5.8
+langchain-cohere>=0.1.0
 
 # Vector database
 pinecone-client>=4.0.0
