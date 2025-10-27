@@ -20,8 +20,15 @@ os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"] = "default"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 
-# Initialize document processor
-doc_processor = DocumentProcessor()
+# Initialize document processor (lazy loading)
+doc_processor = None
+
+def get_doc_processor():
+    """Lazy load document processor"""
+    global doc_processor
+    if doc_processor is None:
+        doc_processor = DocumentProcessor()
+    return doc_processor
 
 # Create a custom synchronous retriever to avoid async session issues
 class SyncRetriever(BaseRetriever):
@@ -39,8 +46,15 @@ class SyncRetriever(BaseRetriever):
             print(f"Error in document retrieval: {e}")
             return []
 
-# Get custom retriever
-retriever = SyncRetriever(doc_processor)
+# Get custom retriever (lazy loading)
+retriever = None
+
+def get_retriever():
+    """Lazy load retriever"""
+    global retriever
+    if retriever is None:
+        retriever = SyncRetriever(get_doc_processor())
+    return retriever
 
 # RAG prompt
 template = """Answer the question based only on the following context:
@@ -71,17 +85,24 @@ model = AzureChatOpenAI(
     api_version=azure_api_version
 )
 
-# Create the RAG chain
-chain = (
-    RunnableParallel({"context": retriever, "question": RunnablePassthrough()})
-    | prompt
-    | model
-    | StrOutputParser()
-)
+# Create the RAG chain (lazy loading)
+chain = None
+
+def get_rag_chain():
+    """Lazy load RAG chain"""
+    global chain
+    if chain is None:
+        chain = (
+            RunnableParallel({"context": get_retriever(), "question": RunnablePassthrough()})
+            | prompt
+            | model
+            | StrOutputParser()
+        )
+    return chain
 
 # Expose the document processor for use in server.py
 __all__ = ["chain", "doc_processor"]
 
 def create_rag_chain():
     """Create and return the RAG chain for use in other modules"""
-    return chain
+    return get_rag_chain()
