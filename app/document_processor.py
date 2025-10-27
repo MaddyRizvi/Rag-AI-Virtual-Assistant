@@ -14,9 +14,13 @@ load_dotenv()
 class DocumentProcessor:
     def __init__(self):
         # Initialize Pinecone client
-        self.pinecone_api_key = os.environ["PINECONE_API_KEY"]
-        self.pinecone_environment = os.environ["PINECONE_ENVIRONMENT"]
-        self.pinecone_index_name = os.environ["PINECONE_INDEX_NAME"]
+        self.pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+        self.pinecone_environment = os.environ.get("PINECONE_ENVIRONMENT", "us-east-1")
+        self.pinecone_index_name = os.environ.get("PINECONE_INDEX_NAME", "index-azure-openai-3072")
+        
+        # Validate required environment variables
+        if not self.pinecone_api_key:
+            raise ValueError("PINECONE_API_KEY environment variable is required")
         
         self.pinecone_client = PineconeClient(
             api_key=self.pinecone_api_key,
@@ -26,13 +30,25 @@ class DocumentProcessor:
         # Initialize embeddings using Azure OpenAI
         try:
             from langchain_openai import AzureOpenAIEmbeddings
+            
+            # Get Azure OpenAI configuration with defaults
+            azure_deployment = os.environ.get("AZ_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-large")
+            azure_endpoint = os.environ.get("AZ_OPENAI_ENDPOINT")
+            azure_api_key = os.environ.get("AZ_OPENAI_API_KEY")
+            azure_api_version = os.environ.get("AZ_OPENAI_API_VERSION", "2024-12-01-preview")
+            
+            # Validate required Azure OpenAI variables
+            if not azure_endpoint or not azure_api_key:
+                print("Azure OpenAI credentials not found, falling back to Cohere embeddings")
+                raise ValueError("Azure OpenAI credentials missing")
+            
             self.embeddings = AzureOpenAIEmbeddings(
-                azure_deployment=os.environ["AZ_OPENAI_EMBEDDING_DEPLOYMENT"],
-                azure_endpoint=os.environ["AZ_OPENAI_ENDPOINT"],
-                api_key=os.environ["AZ_OPENAI_API_KEY"],
-                api_version=os.environ["AZ_OPENAI_API_VERSION"]
+                azure_deployment=azure_deployment,
+                azure_endpoint=azure_endpoint,
+                api_key=azure_api_key,
+                api_version=azure_api_version
             )
-            print(f"Using Azure OpenAI embeddings: {os.environ['AZ_OPENAI_EMBEDDING_DEPLOYMENT']}")
+            print(f"Using Azure OpenAI embeddings: {azure_deployment}")
         except Exception as e:
             print(f"Error initializing Azure OpenAI embeddings: {e}")
             # Fallback to Cohere as backup
