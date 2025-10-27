@@ -71,3 +71,7 @@ chain = (
 
 # Expose the document processor for use in server.py
 __all__ = ["chain", "doc_processor"]
+
+def create_rag_chain():
+    """Create and return the RAG chain for use in other modules"""
+    return chain
