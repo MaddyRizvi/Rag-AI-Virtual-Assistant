@@ -3,6 +3,12 @@ langchain==0.3.2
 langchain-core==0.3.8
 langchain-community==0.3.1
 
+# LangChain integrations
+langchain-cohere>=0.1.0
+langchain-pinecone>=0.1.0
+langchain-openai>=0.1.0
+langchain-text-splitters>=0.1.0
+
 # Serving & tracing
 langserve>=0.2.0
 langsmith==0.1.125
@@ -10,11 +16,9 @@ langsmith==0.1.125
 # LLM & Embeddings providers
 openai>=1.40.0
 cohere==5.5.8
-langchain-cohere>=0.1.0
 
 # Vector database
 pinecone-client>=4.0.0
-langchain-pinecone>=0.1.0
 
 # Web framework for LangServe
 fastapi>=0.110.0
@@ -22,6 +26,9 @@ uvicorn>=0.30.0
 
 # Streamlit web interface
 streamlit>=1.28.0
+
+# PDF processing
+pypdf>=3.0.0
 
 # Environment management
 python-dotenv>=1.0.1
