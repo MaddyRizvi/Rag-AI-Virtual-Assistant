@@ -257,7 +257,7 @@ def main():
         """)
         return
     
-    st.title("📄 Document Q&A System")
+    st.title("📄 AI Assistant for Architects")
     st.markdown("Upload documents and ask questions about them!")
     st.success("✅ All systems initialized successfully!")
     
