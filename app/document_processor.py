@@ -290,23 +290,70 @@ class DocumentProcessor:
                 img_gray = img_gray.filter(ImageFilter.SHARPEN)
                 img_gray = ImageEnhance.Contrast(img_gray).enhance(2.0)
                 
-                # Perform OCR using pytesseract with multiple configurations
-                try:
-                    # Try with page segmentation mode for better results
-                    extracted_text = pytesseract.image_to_string(
-                        img_gray, 
-                        lang='eng',
-                        config='--psm 6 --oem 3'
-                    )
-                except:
-                    # Fallback to basic OCR
-                    extracted_text = pytesseract.image_to_string(img_gray, lang='eng')
+                # Try multiple OCR configurations
+                ocr_attempts = [
+                    # Try with different page segmentation modes
+                    ('--psm 6 --oem 3', 'Auto segmentation'),
+                    ('--psm 3 --oem 3', 'Default'),
+                    ('--psm 1 --oem 3', 'Single column'),
+                    ('', 'Basic fallback')
+                ]
                 
-                # Clean up the extracted text
-                extracted_text = extracted_text.strip()
-                if extracted_text and len(extracted_text) > 10:  # Require meaningful text
-                    print(f"OCR extracted {len(extracted_text)} characters from image")
-                    ocr_status = "success"
+                for config, description in ocr_attempts:
+                    try:
+                        text_attempt = pytesseract.image_to_string(
+                            img_gray, 
+                            lang='eng',
+                            config=config
+                        )
+                        
+                        text_attempt = text_attempt.strip()
+                        
+                        # Check if this attempt gave meaningful results
+                        if text_attempt and len(text_attempt) > 10:
+                            # Additional validation: check for common words/patterns
+                            meaningful_words = len([word for word in text_attempt.split() if len(word) > 3])
+                            if meaningful_words >= 2:  # At least 2 meaningful words
+                                extracted_text = text_attempt
+                                print(f"OCR successful with {description}: {len(extracted_text)} chars, {meaningful_words} words")
+                                ocr_status = "success"
+                                break
+                                
+                    except Exception as attempt_error:
+                        print(f"OCR attempt '{description}' failed: {attempt_error}")
+                        continue
+                
+                # If no meaningful text found, try one more aggressive approach
+                if not extracted_text or len(extracted_text) <= 10:
+                    try:
+                        # Try with more permissive settings
+                        text_attempt = pytesseract.image_to_string(
+                            img_gray, 
+                            lang='eng+osd',  # Include script and orientation detection
+                            config='--psm 11 --oem 1'  # Sparse text with legacy engine
+                        )
+                        text_attempt = text_attempt.strip()
+                        if text_attempt and len(text_attempt) > 10:
+                            extracted_text = text_attempt
+                            print(f"OCR successful with aggressive settings: {len(extracted_text)} chars")
+                            ocr_status = "success"
+                    except Exception as aggressive_error:
+                        print(f"Aggressive OCR failed: {aggressive_error}")
+                
+                # Final validation
+                if extracted_text and len(extracted_text) > 10:
+                    # Remove common OCR artifacts
+                    lines = [line.strip() for line in extracted_text.split('\n') if line.strip()]
+                    extracted_text = '\n'.join(lines)
+                    
+                    # Check if we have substantial content
+                    if len(extracted_text) > 20 and any(len(word) > 4 for word in extracted_text.split()):
+                        print(f"Final OCR result: {len(extracted_text)} characters extracted successfully")
+                        ocr_status = "success"
+                    else:
+                        print(f"OCR result too minimal: {len(extracted_text)} chars")
+                        extracted_text = ""
+                        ocr_status = "no_text_found"
                 else:
                     print("No meaningful text found in image using OCR")
                     extracted_text = ""

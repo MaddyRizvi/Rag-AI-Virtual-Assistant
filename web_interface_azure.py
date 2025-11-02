@@ -233,7 +233,7 @@ def run_api_server():
 # Streamlit Interface
 def main():
     st.set_page_config(
-        page_title="Document Q&A System",
+        page_title="RAGitect: AI Assistant for Architects",
         page_icon="📄",
         layout="wide"
     )
@@ -394,28 +394,53 @@ def upload_files_direct(uploaded_files):
                     if uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
                         # Check if OCR was successful by looking at the first document
                         ocr_success = False
+                        ocr_details = ""
                         if documents and len(documents) > 0:
-                            content_preview = documents[0].page_content[:500]
-                            if "No readable text found" not in content_preview and len(content_preview.strip()) > 100:
-                                ocr_success = True
+                            content_preview = documents[0].page_content
+                            if "Extracted Text Content:" in content_preview:
+                                # Extract the OCR text section
+                                ocr_section = content_preview.split("Extracted Text Content:")[1].split("Additional Notes:")[0].strip()
+                                if ocr_section and "[" not in ocr_section and len(ocr_section) > 20:
+                                    ocr_success = True
+                                    # Count words for better feedback
+                                    word_count = len(ocr_section.split())
+                                    char_count = len(ocr_section)
+                                    ocr_details = f"Extracted {word_count} words ({char_count} characters) from image"
+                                else:
+                                    ocr_details = "Limited or no text extracted from image"
                         
                         if ocr_success:
-                            st.success("🖼️ Image processed with OCR text extraction!")
-                            st.info("📝 Extracted text from images is now searchable in your document database.")
-                            st.info("💡 OCR was successful! Image content can now be found in searches.")
+                            st.success("🖼️ Image processed with successful OCR text extraction!")
+                            st.info(f"📝 {ocr_details}")
+                            st.info("🔍 Extracted text is now searchable in your document database.")
+                            st.balloons()  # Celebration for successful OCR
                         else:
                             st.warning("⚠️ Image processed but OCR text extraction limited")
-                            st.info("📝 Image metadata stored, but text extraction may be limited.")
-                            st.info("💡 This could be due to image quality, handwritten text, or complex visuals.")
+                            st.info(f"📝 {ocr_details}")
+                            st.info("💡 This could be due to:")
+                            st.markdown("""
+                            - Image quality or resolution issues
+                            - Handwritten text (requires specialized OCR)
+                            - Complex layouts or artistic fonts
+                            - Text embedded in graphics or logos
+                            - Poor lighting or contrast in photos
+                            """)
                             
-                        st.markdown("""
-                        **OCR Tips for Better Results:**
-                        - Use high-resolution images (300+ DPI)
-                        Ensure text has good contrast and clarity
-                        Avoid blurry or skewed images
-                        Typed text works better than handwritten
-                        Simple layouts perform better than complex designs
-                        """)
+                            st.markdown("""
+                            **OCR Improvement Tips:**
+                            - ✅ Use high-resolution images (300+ DPI)
+                            - ✅ Ensure text has good contrast and clarity  
+                            - ✅ Use clear, readable fonts (Arial, Times New Roman)
+                            - ✅ Avoid blurry or skewed images
+                            - ✅ Simple layouts work better than complex designs
+                            - ✅ For documents, scan rather than photograph
+                            - ✅ Ensure good lighting for photos of text
+                            """)
+                            
+                            # Show what was actually extracted for debugging
+                            if documents and len(documents) > 0:
+                                with st.expander("🔍 See extracted content (for debugging)"):
+                                    st.text(documents[0].page_content)
                 else:
                     st.error(f"❌ Failed to upload '{uploaded_file.name}'")
             
