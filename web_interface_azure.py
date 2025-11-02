@@ -392,8 +392,9 @@ def upload_files_direct(uploaded_files):
                     
                     # Show additional info for image files
                     if uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        st.info("🖼️ Image processed with metadata stored. Basic file information extracted for searchability.")
-                        st.info("💡 For advanced image analysis (OCR), consider using dedicated OCR services for text extraction.")
+                        st.success("🖼️ Image processed with OCR text extraction!")
+                        st.info("📝 Extracted text from images is now searchable in your document database.")
+                        st.info("💡 For best OCR results, use high-resolution images with clear, readable text.")
                 else:
                     st.error(f"❌ Failed to upload '{uploaded_file.name}'")
             

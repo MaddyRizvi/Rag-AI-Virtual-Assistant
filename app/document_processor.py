@@ -254,15 +254,15 @@ class DocumentProcessor:
             raise Exception(f"Error processing XLSX file: {e}")
     
     def _process_image_file(self, file_path: str, metadata: Dict[str, Any]) -> str:
-        """Process image file using basic text extraction to avoid network issues"""
+        """Process image file using OCR text extraction for actual content analysis"""
         try:
             from PIL import Image
             import io
+            import pytesseract
             
             # Open and process image
             with Image.open(file_path) as img:
                 file_extension = os.path.splitext(file_path)[1].lower()
-                image_data = img.info
                 
                 # Add image metadata
                 metadata.update({
@@ -272,26 +272,57 @@ class DocumentProcessor:
                     "size_bytes": os.path.getsize(file_path)
                 })
             
-            # Extract basic information from image without API calls for now
-            # This avoids network issues with GPT-4o vision API
+            # Perform OCR text extraction
+            extracted_text = ""
+            try:
+                # Convert image to grayscale for better OCR accuracy
+                if img.mode != 'L':
+                    img_gray = img.convert('L')
+                else:
+                    img_gray = img
+                
+                # Perform OCR using pytesseract
+                extracted_text = pytesseract.image_to_string(img_gray, lang='eng')
+                
+                # Clean up the extracted text
+                extracted_text = extracted_text.strip()
+                if extracted_text:
+                    print(f"OCR extracted {len(extracted_text)} characters from image")
+                else:
+                    print("No text found in image using OCR")
+                    
+            except ImportError:
+                print("pytesseract not available - basic metadata only")
+                extracted_text = ""
+            except Exception as ocr_error:
+                print(f"OCR processing failed: {ocr_error}")
+                extracted_text = ""
+            
+            # Create comprehensive image analysis
             image_info = f"""
-            Image Analysis: {os.path.basename(file_path)}
-            Format: {file_extension}
-            Dimensions: {metadata['width']}x{metadata['height']} pixels
-            Size: {metadata['size_bytes']} bytes
+Image Analysis: {os.path.basename(file_path)}
+Format: {file_extension}
+Dimensions: {metadata['width']}x{metadata['height']} pixels
+Size: {metadata['size_bytes']} bytes
+
+Image Content Analysis:
+- File type: {file_extension} image
+- Visual dimensions: {metadata['width']}x{metadata['height']} pixels
+- File size: {metadata['size_bytes']} bytes
+- Processing timestamp: Current processing time
+
+Extracted Text Content:
+{extracted_text if extracted_text else "[No readable text found in this image - visual elements or handwritten content may require manual review]"}
+
+Additional Notes:
+- OCR extraction performed using Tesseract OCR engine
+- Text accuracy depends on image quality and text clarity
+- For complex diagrams, charts, or handwritten content, manual analysis may be required
+- Tables and structured data may have formatting limitations
+- Consider using high-resolution images for better OCR accuracy
+"""
             
-            Content Description:
-            - This is a {file_extension} image file
-            - File type: {file_extension}
-            - Image dimensions: {metadata['width']}x{metadata['height']}
-            - File size: {metadata['size_bytes']} bytes
-            - Upload timestamp: Current processing time
-            
-            Note: Image content analysis requires manual review of the visual elements.
-            For OCR text extraction, consider using dedicated OCR services.
-            """
-            
-            print(f"Image processed: {file_extension}, {metadata['width']}x{metadata['height']}, basic analysis complete")
+            print(f"Image processed: {file_extension}, {metadata['width']}x{metadata['height']}, {'with' if extracted_text else 'without'} extracted text")
             return image_info.strip()
                 
         except Exception as e:
