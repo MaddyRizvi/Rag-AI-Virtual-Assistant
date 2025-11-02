@@ -8,6 +8,8 @@ from langchain_pinecone import Pinecone
 from pinecone import Pinecone as PineconeClient, ServerlessSpec
 from dotenv import load_dotenv
 import hashlib
+import json
+import pandas as pd
 
 load_dotenv()
 
@@ -163,6 +165,132 @@ class DocumentProcessor:
         """Generate a unique ID for the document based on its content"""
         return hashlib.md5(content.encode()).hexdigest()
     
+    def _flatten_json(self, obj, parent_key='', sep='_'):
+        """Flatten nested JSON object into key-value pairs as text"""
+        items = []
+        
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                # Skip ID fields and coordinate-like fields
+                if any(skip_word in key.lower() for skip_word in ['id', '_id', 'coord', 'coordinate', 'x', 'y', 'z', 'lat', 'lon', 'latitude', 'longitude']):
+                    continue
+                new_key = f"{parent_key}{sep}{key}" if parent_key else key
+                items.extend(self._flatten_json(value, new_key, sep))
+        elif isinstance(obj, list):
+            for i, value in enumerate(obj):
+                new_key = f"{parent_key}{sep}{i}" if parent_key else str(i)
+                items.extend(self._flatten_json(value, new_key, sep))
+        else:
+            # Convert primitive values to text
+            if obj is not None and obj != '':
+                items.append(f"{parent_key}: {obj}")
+        
+        return items
+    
+    def _process_json_file(self, file_path: str, metadata: Dict[str, Any]) -> str:
+        """Process JSON file and extract all key-value pairs as flattened text"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+            
+            # Flatten JSON structure and extract text
+            flattened_items = self._flatten_json(json_data)
+            content = '\n'.join(flattened_items)
+            
+            print(f"JSON processed: {len(flattened_items)} key-value pairs extracted")
+            return content
+            
+        except Exception as e:
+            raise Exception(f"Error processing JSON file: {e}")
+    
+    def _process_xlsx_file(self, file_path: str, metadata: Dict[str, Any]) -> str:
+        """Process XLSX file and extract headers and row values"""
+        try:
+            import openpyxl
+            
+            workbook = openpyxl.load_workbook(file_path)
+            all_text = []
+            
+            for sheet_name in workbook.sheetnames:
+                sheet = workbook[sheet_name]
+                rows_data = []
+                
+                # Get headers (first row)
+                headers = []
+                for cell in sheet[1]:  # Assuming first row contains headers
+                    if cell.value is not None:
+                        headers.append(str(cell.value))
+                
+                if headers:
+                    rows_data.append(f"Sheet '{sheet_name}' headers: {', '.join(headers)}")
+                
+                # Process data rows
+                for row in sheet.iter_rows(min_row=2, values_only=True):  # Skip header row
+                    row_text = []
+                    for i, cell_value in enumerate(row):
+                        if cell_value is not None:
+                            header = headers[i] if i < len(headers) else f"Column_{i+1}"
+                            row_text.append(f"{header}: {cell_value}")
+                    
+                    if row_text:
+                        rows_data.append(' | '.join(row_text))
+                
+                if rows_data:
+                    all_text.extend(rows_data)
+            
+            content = '\n'.join(all_text)
+            print(f"XLSX processed: {len(workbook.sheetnames)} sheets, extracted data")
+            return content
+            
+        except Exception as e:
+            raise Exception(f"Error processing XLSX file: {e}")
+    
+    def _process_csv_file(self, file_path: str, metadata: Dict[str, Any]) -> str:
+        """Process CSV file and include headers with row data"""
+        try:
+            # Try different encodings and delimiters
+            encodings = ['utf-8', 'latin-1', 'cp1252']
+            delimiters = [',', ';', '\t']
+            
+            df = None
+            for encoding in encodings:
+                try:
+                    for delimiter in delimiters:
+                        df = pd.read_csv(file_path, encoding=encoding, delimiter=delimiter)
+                        break
+                    if df is not None:
+                        break
+                except:
+                    continue
+            
+            if df is None:
+                df = pd.read_csv(file_path)  # Last resort with default settings
+            
+            # Convert DataFrame to text with headers
+            rows_text = []
+            
+            # Add headers information
+            headers_text = f"Headers: {', '.join(df.columns.tolist())}"
+            rows_text.append(headers_text)
+            
+            # Process each row
+            for idx, row in df.iterrows():
+                row_data = []
+                for col in df.columns:
+                    if pd.notna(row[col]):
+                        row_data.append(f"{col}: {row[col]}")
+                
+                if row_data:
+                    row_text = f"Row {idx + 1}: {' | '.join(row_data)}"
+                    rows_text.append(row_text)
+            
+            content = '\n'.join(rows_text)
+            print(f"CSV processed: {len(df)} rows, {len(df.columns)} columns")
+            return content
+            
+        except Exception as e:
+            raise Exception(f"Error processing CSV file: {e}")
+    
     def process_text(self, text: str, metadata: Dict[str, Any] = None) -> List[Document]:
         """Process raw text into chunks"""
         if metadata is None:
@@ -212,6 +340,24 @@ class DocumentProcessor:
                 return self.process_text(content, metadata)
             except Exception as e:
                 raise Exception(f"Error processing PDF file: {e}")
+        
+        elif file_extension == '.json':
+            content = self._process_json_file(file_path, metadata)
+            metadata["source_type"] = "json_file"
+            metadata["file_name"] = os.path.basename(file_path)
+            return self.process_text(content, metadata)
+        
+        elif file_extension in ['.xlsx', '.xls']:
+            content = self._process_xlsx_file(file_path, metadata)
+            metadata["source_type"] = "excel_file"
+            metadata["file_name"] = os.path.basename(file_path)
+            return self.process_text(content, metadata)
+        
+        elif file_extension == '.csv':
+            content = self._process_csv_file(file_path, metadata)
+            metadata["source_type"] = "csv_file"
+            metadata["file_name"] = os.path.basename(file_path)
+            return self.process_text(content, metadata)
         
         else:
             raise Exception(f"Unsupported file type: {file_extension}")

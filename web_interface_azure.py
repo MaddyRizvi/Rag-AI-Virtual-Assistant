@@ -116,15 +116,15 @@ async def upload_text(request: TextUploadRequest):
 
 @api_app.post("/upload/file", response_model=DocumentResponse)
 async def upload_file(file: UploadFile = File(...)):
-    """Upload a file (PDF or TXT)"""
+    """Upload a file (PDF, TXT, JSON, XLSX, or CSV)"""
     try:
         # Check file type
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file provided")
         
         file_extension = os.path.splitext(file.filename)[1].lower()
-        if file_extension not in ['.txt', '.pdf']:
-            raise HTTPException(status_code=400, detail="Unsupported file type. Only .txt and .pdf files are supported")
+        if file_extension not in ['.txt', '.pdf', '.json', '.xlsx', '.csv']:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Only .txt, .pdf, .json, .xlsx, and .csv files are supported")
         
         # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
@@ -248,8 +248,8 @@ def main():
         # File upload option
         st.subheader("Upload Files")
         uploaded_files = st.file_uploader(
-            "Choose PDF or TXT files:",
-            type=['pdf', 'txt'],
+            "Choose PDF, TXT, JSON, XLSX, or CSV files:",
+            type=['pdf', 'txt', 'json', 'xlsx', 'csv'],
             accept_multiple_files=True,
             key="file_uploader"
         )
