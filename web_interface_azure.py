@@ -392,9 +392,30 @@ def upload_files_direct(uploaded_files):
                     
                     # Show additional info for image files
                     if uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        st.success("🖼️ Image processed with OCR text extraction!")
-                        st.info("📝 Extracted text from images is now searchable in your document database.")
-                        st.info("💡 For best OCR results, use high-resolution images with clear, readable text.")
+                        # Check if OCR was successful by looking at the first document
+                        ocr_success = False
+                        if documents and len(documents) > 0:
+                            content_preview = documents[0].page_content[:500]
+                            if "No readable text found" not in content_preview and len(content_preview.strip()) > 100:
+                                ocr_success = True
+                        
+                        if ocr_success:
+                            st.success("🖼️ Image processed with OCR text extraction!")
+                            st.info("📝 Extracted text from images is now searchable in your document database.")
+                            st.info("💡 OCR was successful! Image content can now be found in searches.")
+                        else:
+                            st.warning("⚠️ Image processed but OCR text extraction limited")
+                            st.info("📝 Image metadata stored, but text extraction may be limited.")
+                            st.info("💡 This could be due to image quality, handwritten text, or complex visuals.")
+                            
+                        st.markdown("""
+                        **OCR Tips for Better Results:**
+                        - Use high-resolution images (300+ DPI)
+                        Ensure text has good contrast and clarity
+                        Avoid blurry or skewed images
+                        Typed text works better than handwritten
+                        Simple layouts perform better than complex designs
+                        """)
                 else:
                     st.error(f"❌ Failed to upload '{uploaded_file.name}'")
             

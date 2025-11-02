@@ -274,29 +274,52 @@ class DocumentProcessor:
             
             # Perform OCR text extraction
             extracted_text = ""
+            ocr_status = "failed"
             try:
+                # Import and check if pytesseract is available
+                import pytesseract
+                
                 # Convert image to grayscale for better OCR accuracy
                 if img.mode != 'L':
                     img_gray = img.convert('L')
                 else:
                     img_gray = img
                 
-                # Perform OCR using pytesseract
-                extracted_text = pytesseract.image_to_string(img_gray, lang='eng')
+                # Enhance image for better OCR
+                from PIL import ImageEnhance, ImageFilter
+                img_gray = img_gray.filter(ImageFilter.SHARPEN)
+                img_gray = ImageEnhance.Contrast(img_gray).enhance(2.0)
+                
+                # Perform OCR using pytesseract with multiple configurations
+                try:
+                    # Try with page segmentation mode for better results
+                    extracted_text = pytesseract.image_to_string(
+                        img_gray, 
+                        lang='eng',
+                        config='--psm 6 --oem 3'
+                    )
+                except:
+                    # Fallback to basic OCR
+                    extracted_text = pytesseract.image_to_string(img_gray, lang='eng')
                 
                 # Clean up the extracted text
                 extracted_text = extracted_text.strip()
-                if extracted_text:
+                if extracted_text and len(extracted_text) > 10:  # Require meaningful text
                     print(f"OCR extracted {len(extracted_text)} characters from image")
+                    ocr_status = "success"
                 else:
-                    print("No text found in image using OCR")
+                    print("No meaningful text found in image using OCR")
+                    extracted_text = ""
+                    ocr_status = "no_text_found"
                     
-            except ImportError:
-                print("pytesseract not available - basic metadata only")
+            except ImportError as import_error:
+                print(f"pytesseract not available: {import_error}")
                 extracted_text = ""
+                ocr_status = "pytesseract_missing"
             except Exception as ocr_error:
                 print(f"OCR processing failed: {ocr_error}")
                 extracted_text = ""
+                ocr_status = "processing_error"
             
             # Create comprehensive image analysis
             image_info = f"""
