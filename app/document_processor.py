@@ -206,9 +206,15 @@ class DocumentProcessor:
     def _process_xlsx_file(self, file_path: str, metadata: Dict[str, Any]) -> str:
         """Process XLSX file and extract headers and row values"""
         try:
-            import openpyxl
+            try:
+                import openpyxl
+            except ImportError as e:
+                raise Exception(f"openpyxl library not available. Please ensure it's installed: {e}")
             
-            workbook = openpyxl.load_workbook(file_path)
+            try:
+                workbook = openpyxl.load_workbook(file_path)
+            except Exception as e:
+                raise Exception(f"Failed to load Excel file. Ensure it's a valid .xlsx file: {e}")
             all_text = []
             
             for sheet_name in workbook.sheetnames:
@@ -248,6 +254,12 @@ class DocumentProcessor:
     def _process_csv_file(self, file_path: str, metadata: Dict[str, Any]) -> str:
         """Process CSV file and include headers with row data"""
         try:
+            # Check if pandas is available
+            try:
+                import pandas as pd
+            except ImportError as e:
+                raise Exception(f"pandas library not available. Please ensure it's installed: {e}")
+            
             # Try different encodings and delimiters
             encodings = ['utf-8', 'latin-1', 'cp1252']
             delimiters = [',', ';', '\t']

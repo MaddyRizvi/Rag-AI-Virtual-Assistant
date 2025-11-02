@@ -31,22 +31,44 @@ import asyncio
 # Initialize the document processor and chain (lazy loading for better startup)
 doc_processor = None
 rag_chain = None
+startup_error = None
 
 def get_doc_processor():
-    """Lazy load document processor"""
-    global doc_processor
+    """Lazy load document processor with error handling"""
+    global doc_processor, startup_error
     if doc_processor is None:
-        print("Initializing document processor...")
-        doc_processor = DocumentProcessor()
+        try:
+            print("Initializing document processor...")
+            doc_processor = DocumentProcessor()
+        except Exception as e:
+            startup_error = f"Document processor initialization failed: {str(e)}"
+            print(f"ERROR: {startup_error}")
+            doc_processor = None
+            raise Exception(startup_error)
     return doc_processor
 
 def get_rag_chain():
-    """Lazy load RAG chain"""
-    global rag_chain
+    """Lazy load RAG chain with error handling"""
+    global rag_chain, startup_error
     if rag_chain is None:
-        print("Initializing RAG chain...")
-        rag_chain = create_rag_chain()
+        try:
+            print("Initializing RAG chain...")
+            rag_chain = create_rag_chain()
+        except Exception as e:
+            startup_error = f"RAG chain initialization failed: {str(e)}"
+            print(f"ERROR: {startup_error}")
+            rag_chain = None
+            raise Exception(startup_error)
     return rag_chain
+
+def check_startup_status():
+    """Check if all components are properly initialized"""
+    try:
+        processor = get_doc_processor()
+        chain = get_rag_chain()
+        return True, "All components initialized successfully"
+    except Exception as e:
+        return False, str(e)
 
 # Create FastAPI app for the backend (optional)
 api_app = FastAPI(title="Document RAG API", description="Upload documents and ask questions about them")
@@ -216,8 +238,28 @@ def main():
         layout="wide"
     )
     
+    # Check startup status
+    startup_ok, status_msg = check_startup_status()
+    if not startup_ok:
+        st.error(f"❌ Startup Error: {status_msg}")
+        st.error("Please check your environment variables and dependencies.")
+        st.markdown("""
+        ### Troubleshooting Steps:
+        1. **Environment Variables**: Ensure PINECONE_API_KEY, AZ_OPENAI_ENDPOINT, AZ_OPENAI_API_KEY are set
+        2. **Dependencies**: Check that all required packages are installed
+        3. **Azure Portal**: Verify Application Settings in your Web App Configuration
+        4. **GitHub Actions**: Check deployment logs for installation errors
+        
+        ### Required Environment Variables:
+        - `PINECONE_API_KEY`: Your Pinecone API key
+        - `AZ_OPENAI_ENDPOINT`: Your Azure OpenAI endpoint
+        - `AZ_OPENAI_API_KEY`: Your Azure OpenAI API key
+        """)
+        return
+    
     st.title("📄 Document Q&A System")
     st.markdown("Upload documents and ask questions about them!")
+    st.success("✅ All systems initialized successfully!")
     
     # Initialize session state
     if 'uploaded_files' not in st.session_state:
