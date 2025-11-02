@@ -145,8 +145,8 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="No file provided")
         
         file_extension = os.path.splitext(file.filename)[1].lower()
-        if file_extension not in ['.txt', '.pdf', '.json', '.xlsx', '.csv']:
-            raise HTTPException(status_code=400, detail="Unsupported file type. Only .txt, .pdf, .json, .xlsx, and .csv files are supported")
+        if file_extension not in ['.txt', '.pdf', '.json', '.xlsx', '.csv', '.jpg', '.jpeg', '.png']:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Only .txt, .pdf, .json, .xlsx, .csv, .jpg, .jpeg, and .png files are supported")
         
         # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
@@ -290,8 +290,8 @@ def main():
         # File upload option
         st.subheader("Upload Files")
         uploaded_files = st.file_uploader(
-            "Choose PDF, TXT, JSON, XLSX, or CSV files:",
-            type=['pdf', 'txt', 'json', 'xlsx', 'csv'],
+            "Choose PDF, TXT, JSON, XLSX, CSV, JPG, or PNG files:",
+            type=['pdf', 'txt', 'json', 'xlsx', 'csv', 'jpg', 'jpeg', 'png'],
             accept_multiple_files=True,
             key="file_uploader"
         )
