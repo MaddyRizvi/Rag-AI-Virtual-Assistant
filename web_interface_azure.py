@@ -362,6 +362,13 @@ def upload_files_direct(uploaded_files):
     """Upload files directly"""
     for uploaded_file in uploaded_files:
         try:
+            # Check file size for images (limit to 10MB to avoid network issues)
+            if uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                file_size = len(uploaded_file.getbuffer())
+                if file_size > 10 * 1024 * 1024:  # 10MB limit
+                    st.warning(f"⚠️ Large image detected ({file_size / (1024*1024):.1f}MB). For better performance, consider resizing images under 10MB.")
+                    # Still process but with warning
+            
             with st.spinner(f"Processing {uploaded_file.name}..."):
                 # Save uploaded file temporarily
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp_file:
@@ -382,6 +389,11 @@ def upload_files_direct(uploaded_files):
                     st.success(f"✅ File '{uploaded_file.name}' uploaded successfully!")
                     st.info(f"Document ID: {doc_id}")
                     st.info(f"Chunks processed: {len(documents)}")
+                    
+                    # Show additional info for image files
+                    if uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                        st.info("🖼️ Image processed with metadata stored. Basic file information extracted for searchability.")
+                        st.info("💡 For advanced image analysis (OCR), consider using dedicated OCR services for text extraction.")
                 else:
                     st.error(f"❌ Failed to upload '{uploaded_file.name}'")
             
@@ -390,6 +402,10 @@ def upload_files_direct(uploaded_files):
         
         except Exception as e:
             st.error(f"❌ Error uploading '{uploaded_file.name}': {str(e)}")
+            # Provide helpful error message for network issues
+            if "network" in str(e).lower() or "connection" in str(e).lower():
+                st.error("🔌 Network error detected. This might be due to large file sizes or connectivity issues.")
+                st.info("💡 Try uploading smaller files or check your internet connection.")
 
 def ask_question_direct(question: str):
     """Ask a question using the RAG system directly"""
