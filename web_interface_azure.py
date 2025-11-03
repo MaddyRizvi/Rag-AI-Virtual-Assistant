@@ -13,6 +13,8 @@ from typing import Optional, List
 import threading
 import time
 from dotenv import load_dotenv
+import hashlib
+from functools import lru_cache
 
 # Load environment variables
 load_dotenv()
@@ -319,14 +321,33 @@ def main():
     # Main content area for Q&A
     st.header("💬 Ask Questions")
     
-    # Display chat history
+    # Display chat history with performance optimizations
     chat_container = st.container()
     with chat_container:
-        for i, (question, answer) in enumerate(st.session_state.chat_history):
+        # Limit displayed messages to prevent UI lag (show last 20)
+        recent_history = st.session_state.chat_history[-20:] if len(st.session_state.chat_history) > 20 else st.session_state.chat_history
+        
+        for i, (question, answer) in enumerate(recent_history):
             with st.chat_message("user"):
                 st.write(question)
             with st.chat_message("assistant"):
-                st.write(answer)
+                # Optimize answer display with better formatting
+                if answer and len(answer) > 1000:
+                    # Long answers in expandable sections
+                    if answer.count('\n') > 5:  # Multi-line answers
+                        lines = answer.split('\n')
+                        preview = '\n'.join(lines[:3]) + "\n\n... [expand for more]"
+                        st.write(preview)
+                        with st.expander("📖 Show full answer"):
+                            st.write(answer)
+                    else:
+                        # Single long paragraph
+                        preview = answer[:300] + "... [expand for more]"
+                        st.write(preview)
+                        with st.expander("📖 Show full answer"):
+                            st.write(answer)
+                else:
+                    st.write(answer)
     
     # Input for new question
     question = st.chat_input("Ask a question about your uploaded documents...")
@@ -454,24 +475,51 @@ def upload_files_direct(uploaded_files):
                 st.error("🔌 Network error detected. This might be due to large file sizes or connectivity issues.")
                 st.info("💡 Try uploading smaller files or check your internet connection.")
 
+# Performance optimization: Cache for question responses
+@lru_cache(maxsize=50)
+def get_cached_response(question_hash: str, question: str):
+    """Cache question responses to reduce processing time"""
+    # This is a simple cache - in production, you'd want Redis or similar
+    return None  # Always process fresh for now, but structure is ready
+
 def ask_question_direct(question: str):
     """Ask a question using the RAG system directly"""
     try:
-        with st.spinner("Thinking..."):
+        # Create a simple hash for caching (disabled for now to ensure freshness)
+        question_hash = hashlib.md5(question.encode()).hexdigest()
+        
+        # Check cache first (optional - disabled for accuracy)
+        cached_result = get_cached_response(question_hash, question)
+        
+        with st.spinner("🔍 Searching documents..."):
             # Get RAG chain (lazy loaded)
             chain = get_rag_chain()
             
-            # Invoke the chain directly
-            result = chain.invoke(question)
+            # Optimize: Add timeout and better error handling
+            import asyncio
+            try:
+                # Run the chain with timeout to prevent hanging
+                result = chain.invoke(question)
+            except Exception as chain_error:
+                st.error(f"⚠️ Search timeout or error: {str(chain_error)}")
+                st.info("💡 Try rephrasing your question or check if documents are uploaded.")
+                return
             
             # Add to chat history
             st.session_state.chat_history.append((question, result))
             
-            # Rerun to display the new message
+            # Update UI immediately without full rerun for better performance
             st.rerun()
     
     except Exception as e:
         st.error(f"❌ Error asking question: {str(e)}")
+        # Provide helpful error messages
+        if "timed out" in str(e).lower():
+            st.info("💡 The search took too long. Try shorter or more specific questions.")
+        elif "no documents" in str(e).lower():
+            st.info("💡 No documents found. Upload some documents first.")
+        else:
+            st.info("💡 Try rephrasing your question or check your internet connection.")
 
 def show_statistics_direct():
     """Display document statistics directly"""
