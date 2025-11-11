@@ -268,10 +268,24 @@ def teacher_dashboard():
         st.session_state.uploaded_files = []
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
+    if 'current_course' not in st.session_state:
+        st.session_state.current_course = "general"
     
     # Teacher-specific sidebar with full admin features
     with st.sidebar:
         st.header("📚 Course Management")
+        
+        # Course selection
+        st.subheader("🎯 Course Selection")
+        available_courses = ["general", "math101", "physics101", "chemistry101", "biology101", "history101"]
+        selected_course = st.selectbox(
+            "Select Course:",
+            options=available_courses,
+            index=available_courses.index(st.session_state.current_course) if st.session_state.current_course in available_courses else 0,
+            key="course_selector"
+        )
+        st.session_state.current_course = selected_course
+        st.info(f"📍 Current course: `{selected_course}`")
         
         # Document upload section
         st.subheader("📁 Upload Materials")
@@ -422,10 +436,24 @@ def student_interface():
     # Initialize session state
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
+    if 'current_course' not in st.session_state:
+        st.session_state.current_course = "general"
     
     # Student sidebar with limited features
     with st.sidebar:
         st.header("📖 Learning Tools")
+        
+        # Course selection
+        st.subheader("🎯 Course Selection")
+        available_courses = ["general", "math101", "physics101", "chemistry101", "biology101", "history101"]
+        selected_course = st.selectbox(
+            "Select Course:",
+            options=available_courses,
+            index=available_courses.index(st.session_state.current_course) if st.session_state.current_course in available_courses else 0,
+            key="student_course_selector"
+        )
+        st.session_state.current_course = selected_course
+        st.info(f"📍 Current course: `{selected_course}`")
         
         # Help section
         st.subheader("❓ How to Use")
@@ -539,11 +567,11 @@ def upload_text_direct(text_content: str):
             # Get document processor (lazy loaded)
             processor = get_doc_processor()
             
-            # Process the text directly
-            documents = processor.process_text(text_content, {"source": "web_interface", "type": "text"})
+            # Process the text directly with course_id
+            documents = processor.process_text(text_content, {"source": "web_interface", "type": "text", "course_id": st.session_state.current_course})
             
-            # Add to vector store
-            success = processor.add_documents_to_vectorstore(documents)
+            # Add to vector store with course namespace
+            success = processor.add_documents_to_vectorstore(documents, st.session_state.current_course)
             
             if success:
                 doc_id = documents[0].metadata.get("doc_id") if documents else None
@@ -576,11 +604,11 @@ def upload_files_direct(uploaded_files):
                 # Get document processor (lazy loaded)
                 processor = get_doc_processor()
                 
-                # Process the file directly
-                documents = processor.process_file(tmp_file_path, {"original_filename": uploaded_file.name})
+                # Process the file directly with course_id
+                documents = processor.process_file(tmp_file_path, {"original_filename": uploaded_file.name}, st.session_state.current_course)
                 
-                # Add to vector store
-                success = processor.add_documents_to_vectorstore(documents)
+                # Add to vector store with course namespace
+                success = processor.add_documents_to_vectorstore(documents, st.session_state.current_course)
                 
                 if success:
                     doc_id = documents[0].metadata.get("doc_id") if documents else None
@@ -669,8 +697,8 @@ def ask_question_direct(question: str):
         cached_result = get_cached_response(question_hash, question)
         
         with st.spinner("🔍 Searching documents..."):
-            # Get RAG chain (lazy loaded)
-            chain = get_rag_chain()
+            # Get RAG chain (lazy loaded) with course_id
+            chain = get_rag_chain(st.session_state.current_course)
             
             # Optimize: Add timeout and better error handling
             import asyncio

@@ -33,28 +33,30 @@ def get_doc_processor():
 # Create a custom synchronous retriever to avoid async session issues
 class SyncRetriever(BaseRetriever):
     doc_processor: DocumentProcessor
+    course_id: str
     
-    def __init__(self, doc_processor: DocumentProcessor):
+    def __init__(self, doc_processor: DocumentProcessor, course_id: str = "general"):
         super().__init__(doc_processor=doc_processor)
+        self.course_id = course_id
     
     def _get_relevant_documents(self, query: str) -> List[Document]:
         """Synchronous document retrieval to avoid async session issues"""
         try:
-            # Use the synchronous search method
-            return self.doc_processor.search_documents(query, k=5)
+            # Use synchronous search method with course namespace
+            return self.doc_processor.search_documents(query, course_id=self.course_id, k=5)
         except Exception as e:
-            print(f"Error in document retrieval: {e}")
+            print(f"Error in document retrieval for course '{self.course_id}': {e}")
             return []
 
-# Get custom retriever (lazy loading)
-retriever = None
+# Get custom retriever (lazy loading with course support)
+retrievers = {}  # Cache retrievers per course
 
-def get_retriever():
-    """Lazy load retriever"""
-    global retriever
-    if retriever is None:
-        retriever = SyncRetriever(get_doc_processor())
-    return retriever
+def get_retriever(course_id: str = "general"):
+    """Lazy load retriever for specific course"""
+    global retrievers
+    if course_id not in retrievers:
+        retrievers[course_id] = SyncRetriever(get_doc_processor(), course_id)
+    return retrievers[course_id]
 
 # RAG prompt
 template = """Answer the question based only on the following context:
@@ -128,6 +130,13 @@ def get_rag_chain():
 # Expose the document processor for use in server.py
 __all__ = ["chain", "doc_processor"]
 
-def create_rag_chain():
-    """Create and return the RAG chain for use in other modules"""
-    return get_rag_chain()
+def create_rag_chain(course_id: str = "general"):
+    """Create and return the RAG chain for use in other modules with course support"""
+    # Create chain for specific course
+    chain = (
+        RunnableParallel({"context": get_retriever(course_id), "question": RunnablePassthrough()})
+        | prompt
+        | model
+        | StrOutputParser()
+    )
+    return chain

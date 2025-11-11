@@ -115,8 +115,8 @@ class DocumentProcessor:
         self.vectorstore = None
         self._initialize_vectorstore()
     
-    def _initialize_vectorstore(self):
-        """Initialize the Pinecone vector store"""
+    def _get_vectorstore_for_namespace(self, course_id: str = "general"):
+        """Get or create a vector store for a specific namespace/course"""
         try:
             # Check if index exists
             if self.pinecone_index_name not in self.pinecone_client.list_indexes().names():
@@ -133,15 +133,17 @@ class DocumentProcessor:
                 )
                 print(f"Index '{self.pinecone_index_name}' created successfully")
             
-            # Initialize vector store with existing index using the new API
-            self.vectorstore = Pinecone.from_existing_index(
+            # Initialize vector store with namespace using the new API
+            vectorstore = Pinecone.from_existing_index(
                 index_name=self.pinecone_index_name,
-                embedding=self.embeddings
+                embedding=self.embeddings,
+                namespace=course_id
             )
-            print(f"Vector store initialized successfully with index '{self.pinecone_index_name}'")
+            print(f"Vector store initialized successfully with index '{self.pinecone_index_name}' and namespace '{course_id}'")
+            return vectorstore
             
         except Exception as e:
-            print(f"Error initializing vector store: {e}")
+            print(f"Error initializing vector store for namespace '{course_id}': {e}")
             # Try alternative initialization for newer Pinecone API
             try:
                 # Try using the newer Pinecone API structure
@@ -151,17 +153,23 @@ class DocumentProcessor:
                 # Get the index
                 index = new_client.Index(self.pinecone_index_name)
                 
-                # Initialize vector store with the new client
-                self.vectorstore = Pinecone(
+                # Initialize vector store with the new client and namespace
+                vectorstore = Pinecone(
                     index=index,
                     embedding_function=self.embeddings,
-                    text_key="text"
+                    text_key="text",
+                    namespace=course_id
                 )
-                print(f"Vector store initialized successfully with new API for index '{self.pinecone_index_name}'")
+                print(f"Vector store initialized successfully with new API for index '{self.pinecone_index_name}' and namespace '{course_id}'")
+                return vectorstore
                 
             except Exception as e2:
                 print(f"Failed to initialize with new API as well: {e2}")
-                raise Exception(f"Failed to initialize Pinecone vector store: {str(e)}")
+                raise Exception(f"Failed to initialize Pinecone vector store for namespace '{course_id}': {str(e)}")
+    
+    def _initialize_vectorstore(self):
+        """Initialize the default Pinecone vector store"""
+        self.vectorstore = self._get_vectorstore_for_namespace("general")
     
     def _generate_document_id(self, content: str) -> str:
         """Generate a unique ID for the document based on its content"""
@@ -472,10 +480,13 @@ Additional Notes:
         
         return documents
     
-    def process_file(self, file_path: str, metadata: Dict[str, Any] = None) -> List[Document]:
-        """Process a file based on its extension"""
+    def process_file(self, file_path: str, metadata: Dict[str, Any] = None, course_id: str = "general") -> List[Document]:
+        """Process a file based on its extension with course namespace support"""
         if metadata is None:
             metadata = {}
+        
+        # Add course_id to metadata for namespace tracking
+        metadata["course_id"] = course_id
         
         file_extension = os.path.splitext(file_path)[1].lower()
         
@@ -527,35 +538,45 @@ Additional Notes:
         else:
             raise Exception(f"Unsupported file type: {file_extension}")
     
-    def add_documents_to_vectorstore(self, documents: List[Document]):
-        """Add processed documents to the vector store"""
+    def add_documents_to_vectorstore(self, documents: List[Document], course_id: str = "general"):
+        """Add processed documents to the vector store with course namespace"""
         try:
-            # Add documents to Pinecone
-            self.vectorstore.add_documents(documents)
+            # Get vector store for specific course namespace
+            course_vectorstore = self._get_vectorstore_for_namespace(course_id)
+            
+            # Add documents to Pinecone with namespace
+            course_vectorstore.add_documents(documents)
+            print(f"Added {len(documents)} documents to course namespace: {course_id}")
             return True
         except Exception as e:
-            print(f"Error adding documents to vector store: {e}")
+            print(f"Error adding documents to vector store for course '{course_id}': {e}")
             return False
     
-    def search_documents(self, query: str, k: int = 5):
-        """Search for relevant documents"""
-        if self.vectorstore is None:
-            return []
-        
+    def search_documents(self, query: str, course_id: str = "general", k: int = 5):
+        """Search for relevant documents within a specific course namespace"""
         try:
-            results = self.vectorstore.similarity_search(query, k=k)
+            # Get vector store for specific course namespace
+            course_vectorstore = self._get_vectorstore_for_namespace(course_id)
+            
+            # Search within the namespace
+            results = course_vectorstore.similarity_search(query, k=k)
+            print(f"Found {len(results)} results in course namespace: {course_id}")
             return results
         except Exception as e:
-            print(f"Error searching documents: {e}")
+            print(f"Error searching documents in course '{course_id}': {e}")
             return []
     
-    def get_retriever(self):
-        """Get the retriever for the RAG chain"""
-        if self.vectorstore is None:
-            raise Exception("Vector store not initialized")
-        
-        # Use synchronous retriever to avoid session closure issues
-        return self.vectorstore.as_retriever(search_kwargs={"k": 5})
+    def get_retriever(self, course_id: str = "general"):
+        """Get retriever for the RAG chain for a specific course"""
+        try:
+            # Get vector store for specific course namespace
+            course_vectorstore = self._get_vectorstore_for_namespace(course_id)
+            
+            # Use synchronous retriever to avoid session closure issues
+            return course_vectorstore.as_retriever(search_kwargs={"k": 5})
+        except Exception as e:
+            print(f"Error getting retriever for course '{course_id}': {e}")
+            raise Exception(f"Failed to get retriever for course '{course_id}': {str(e)}")
     
     def clear_documents(self, doc_id: str = None):
         """Clear documents from the vector store"""
