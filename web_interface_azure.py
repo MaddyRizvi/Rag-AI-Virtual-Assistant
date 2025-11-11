@@ -232,11 +232,11 @@ def run_api_server():
         else:
             raise e
 
-# Streamlit Interface
-def main():
+# Teacher Dashboard Interface
+def teacher_dashboard():
     st.set_page_config(
-        page_title="RAGitect: AI Assistant for Architects",
-        page_icon="📄",
+        page_title="RAGitect - Teacher Dashboard",
+        page_icon="👨‍🏫",
         layout="wide"
     )
     
@@ -259,9 +259,9 @@ def main():
         """)
         return
     
-    st.title("📄 AI Assistant for Architects")
-    st.markdown("Upload documents and ask questions about them!")
-    st.success("✅ All systems initialized successfully!")
+    st.title("👨‍🏫 Teacher Dashboard")
+    st.markdown("Upload and manage course materials for students!")
+    st.success("✅ Teacher mode - Full access enabled!")
     
     # Initialize session state
     if 'uploaded_files' not in st.session_state:
@@ -269,19 +269,22 @@ def main():
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
     
-    # Sidebar for document upload
+    # Teacher-specific sidebar with full admin features
     with st.sidebar:
-        st.header("📁 Document Upload")
+        st.header("📚 Course Management")
+        
+        # Document upload section
+        st.subheader("📁 Upload Materials")
         
         # Text upload option
-        st.subheader("Upload Text")
+        st.text("Upload course content:")
         text_content = st.text_area(
-            "Or paste text content here:",
+            "Course text content:",
             height=150,
-            placeholder="Paste your document text here..."
+            placeholder="Paste lecture notes, assignments, or course materials..."
         )
         
-        if st.button("Upload Text", key="upload_text_btn"):
+        if st.button("📤 Upload Text", key="teacher_upload_text_btn", help="Upload text content for students"):
             if text_content.strip():
                 upload_text_direct(text_content)
             else:
@@ -290,15 +293,16 @@ def main():
         st.markdown("---")
         
         # File upload option
-        st.subheader("Upload Files")
+        st.subheader("📋 File Upload")
         uploaded_files = st.file_uploader(
-            "Choose PDF, TXT, JSON, XLSX, CSV, JPG, or PNG files:",
+            "Upload course materials (PDF, TXT, JSON, XLSX, CSV, JPG, PNG):",
             type=['pdf', 'txt', 'json', 'xlsx', 'csv', 'jpg', 'jpeg', 'png'],
             accept_multiple_files=True,
-            key="file_uploader"
+            key="teacher_file_uploader",
+            help="Upload multiple files at once for better organization"
         )
         
-        if st.button("Upload Files", key="upload_files_btn"):
+        if st.button("📤 Upload Files", key="teacher_upload_files_btn", help="Upload files for students to access"):
             if uploaded_files:
                 upload_files_direct(uploaded_files)
             else:
@@ -306,54 +310,227 @@ def main():
         
         st.markdown("---")
         
+        # Admin controls
+        st.subheader("⚙️ Admin Controls")
+        
         # Document management
-        st.subheader("📊 Document Stats")
-        if st.button("View Statistics", key="stats_btn"):
+        if st.button("📊 View Statistics", key="teacher_stats_btn", help="View system statistics and usage"):
             show_statistics_direct()
+        
+        # Chat management
+        if st.button("🗑️ Clear All Chats", key="teacher_clear_all_btn", help="Clear all chat histories"):
+            st.session_state.chat_history = []
+            st.success("All chat histories cleared!")
+        
+        # System info
+        st.markdown("---")
+        st.subheader("ℹ️ System Info")
+        st.info(f"🔑 Role: Teacher (Admin Access)")
+        st.info(f"📚 Vector Store: {os.environ.get('PINECONE_INDEX_NAME', 'unknown')}")
+        st.info(f"🤖 AI Model: Azure GPT-4o")
+    
+    # Main content area with teacher features
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.header("💬 Test Q&A System")
+        st.markdown("Test the knowledge base before making it available to students.")
+        
+        # Display chat history with performance optimizations
+        chat_container = st.container()
+        with chat_container:
+            # Limit displayed messages to prevent UI lag
+            recent_history = st.session_state.chat_history[-20:] if len(st.session_state.chat_history) > 20 else st.session_state.chat_history
+            
+            for i, (question, answer) in enumerate(recent_history):
+                with st.chat_message("user"):
+                    st.write(question)
+                with st.chat_message("assistant"):
+                    # Optimize answer display
+                    if answer and len(answer) > 1000:
+                        if answer.count('\n') > 5:
+                            lines = answer.split('\n')
+                            preview = '\n'.join(lines[:3]) + "\n\n... [expand for more]"
+                            st.write(preview)
+                            with st.expander("📖 Show full answer"):
+                                st.write(answer)
+                        else:
+                            preview = answer[:300] + "... [expand for more]"
+                            st.write(preview)
+                            with st.expander("📖 Show full answer"):
+                                st.write(answer)
+                    else:
+                        st.write(answer)
+        
+        # Input for testing questions
+        question = st.chat_input("Test a question about your uploaded materials...")
+        if question:
+            ask_question_direct(question)
+    
+    with col2:
+        st.header("📈 Quick Stats")
+        
+        # Quick statistics
+        chat_count = len(st.session_state.chat_history)
+        st.metric("💬 Test Questions", chat_count)
+        
+        # Recent activity
+        st.subheader("🕐 Recent Activity")
+        if st.session_state.chat_history:
+            last_q, last_a = st.session_state.chat_history[-1]
+            st.text(f"Last question: {last_q[:50]}...")
+        else:
+            st.text("No activity yet")
+        
+        # Quick actions
+        st.subheader("🚀 Quick Actions")
+        if st.button("🔄 Refresh System", key="refresh_btn"):
+            st.rerun()
+        
+        if st.button("📋 Export Logs", key="export_logs_btn"):
+            if st.session_state.chat_history:
+                logs = json.dumps(st.session_state.chat_history, indent=2)
+                st.download_button(
+                    label="Download Chat Logs",
+                    data=logs,
+                    file_name="teacher_chat_logs.json",
+                    mime="application/json"
+                )
+            else:
+                st.info("No logs to export")
+
+# Student Interface
+def student_interface():
+    st.set_page_config(
+        page_title="RAGitect - Student Assistant",
+        page_icon="🎓",
+        layout="wide"
+    )
+    
+    # Check startup status
+    startup_ok, status_msg = check_startup_status()
+    if not startup_ok:
+        st.error(f"❌ System Unavailable: {status_msg}")
+        st.error("The learning assistant is currently unavailable. Please try again later.")
+        st.info("📞 Contact your teacher if this issue persists.")
+        return
+    
+    st.title("🎓 Learning Assistant")
+    st.markdown("Ask questions about your course materials!")
+    st.info("📚 Access your course knowledge base through AI-powered search")
+    
+    # Initialize session state
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    
+    # Student sidebar with limited features
+    with st.sidebar:
+        st.header("📖 Learning Tools")
+        
+        # Help section
+        st.subheader("❓ How to Use")
+        st.markdown("""
+        1. **Ask Questions**: Type your questions about course materials
+        2. **Get Answers**: Receive AI-powered responses
+        3. **Learn**: Explore topics with detailed explanations
+        
+        **Tips:**
+        - Be specific in your questions
+        - Use keywords from your course
+        - Ask follow-up questions for clarity
+        """)
         
         st.markdown("---")
         
-        # Clear chat
-        if st.button("Clear Chat", key="clear_chat_btn"):
+        # Chat controls
+        st.subheader("💬 Chat Controls")
+        
+        if st.button("🗑️ Clear My Chat", key="student_clear_btn", help="Clear your personal chat history"):
             st.session_state.chat_history = []
-            st.success("Chat history cleared!")
+            st.success("Your chat history cleared!")
+        
+        # Quick help prompts
+        st.markdown("---")
+        st.subheader("💡 Quick Prompts")
+        
+        sample_questions = [
+            "What are the main concepts in this course?",
+            "Explain [topic] in simple terms",
+            "What should I study for the exam?",
+            "Give me examples of [concept]",
+            "How does [theory] apply to practice?"
+        ]
+        
+        for question in sample_questions:
+            if st.button(f"❓ {question}", key=f"prompt_{question}", help="Click to ask this question"):
+                # Auto-fill the question
+                st.session_state.quick_question = question
+        
+        st.markdown("---")
+        st.subheader("ℹ️ Student Info")
+        st.info(f"🎓 Role: Student")
+        st.info(f"🤖 AI Assistant: Active")
+        st.info(f"📚 Knowledge Base: Ready")
     
-    # Main content area for Q&A
-    st.header("💬 Ask Questions")
+    # Main chat interface (simplified for students)
+    st.header("💭 Ask Your Question")
     
     # Display chat history with performance optimizations
     chat_container = st.container()
     with chat_container:
-        # Limit displayed messages to prevent UI lag (show last 20)
-        recent_history = st.session_state.chat_history[-20:] if len(st.session_state.chat_history) > 20 else st.session_state.chat_history
+        # Limit displayed messages to prevent UI lag
+        recent_history = st.session_state.chat_history[-15:] if len(st.session_state.chat_history) > 15 else st.session_state.chat_history
+        
+        if not recent_history:
+            st.info("👋 Welcome! Start by asking a question about your course materials.")
         
         for i, (question, answer) in enumerate(recent_history):
             with st.chat_message("user"):
                 st.write(question)
             with st.chat_message("assistant"):
-                # Optimize answer display with better formatting
-                if answer and len(answer) > 1000:
-                    # Long answers in expandable sections
-                    if answer.count('\n') > 5:  # Multi-line answers
+                # Optimize answer display for students
+                if answer and len(answer) > 800:  # Shorter limit for students
+                    if answer.count('\n') > 3:
                         lines = answer.split('\n')
-                        preview = '\n'.join(lines[:3]) + "\n\n... [expand for more]"
+                        preview = '\n'.join(lines[:2]) + "\n\n... [expand for more]"
                         st.write(preview)
-                        with st.expander("📖 Show full answer"):
+                        with st.expander("📖 See detailed answer"):
                             st.write(answer)
                     else:
-                        # Single long paragraph
-                        preview = answer[:300] + "... [expand for more]"
+                        preview = answer[:250] + "... [expand for more]"
                         st.write(preview)
-                        with st.expander("📖 Show full answer"):
+                        with st.expander("📖 See detailed answer"):
                             st.write(answer)
                 else:
                     st.write(answer)
     
-    # Input for new question
-    question = st.chat_input("Ask a question about your uploaded documents...")
+    # Input for student questions
+    # Check for quick question from sidebar
+    quick_question = st.session_state.pop('quick_question', None)
+    
+    if quick_question:
+        question = quick_question
+    else:
+        question = st.chat_input("Ask about your course materials...", help="Ask anything about your uploaded course content")
     
     if question:
         ask_question_direct(question)
+
+# Main routing function
+def main():
+    # Get role from URL parameters or query parameters
+    query_params = st.query_params
+    role = query_params.get('role', 'student').lower()  # Default to student for safety
+    
+    # Route to appropriate interface based on role
+    if role == 'teacher':
+        teacher_dashboard()
+    elif role == 'student':
+        student_interface()
+    else:
+        # Default to student for unknown roles with a warning
+        st.warning("⚠️ Unknown role. Defaulting to Student interface.")
+        student_interface()
 
 def upload_text_direct(text_content: str):
     """Upload text content directly"""
