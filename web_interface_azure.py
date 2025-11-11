@@ -113,6 +113,26 @@ def check_startup_status():
     except Exception as e:
         return False, str(e)
 
+# --- Student course assignment helpers ---
+def get_assigned_course_id() -> Optional[str]:
+    """Determine assigned course_id for the current student session.
+    Priority: URL query params (course or course_id) -> env STUDENT_COURSE_ID.
+    """
+    try:
+        qp = getattr(st, "query_params", {})
+        # st.query_params behaves like a dict of strings
+        if qp:
+            if "course_id" in qp and qp.get("course_id"):
+                return str(qp.get("course_id")).strip()
+            if "course" in qp and qp.get("course"):
+                return str(qp.get("course")).strip()
+    except Exception:
+        pass
+    env_course = os.environ.get("STUDENT_COURSE_ID")
+    if env_course:
+        return env_course.strip()
+    return None
+
 # Create FastAPI app for the backend (optional)
 api_app = FastAPI(title="Document RAG API", description="Upload documents and ask questions about them")
 
@@ -784,9 +804,19 @@ def ask_question_direct(question: str):
         # Check cache first (optional - disabled for accuracy)
         cached_result = get_cached_response(question_hash, question)
         
+        # Enforce assigned course from URL/env if present
+        try:
+            assigned = get_assigned_course_id()
+            if assigned:
+                st.session_state.assigned_course = assigned
+        except Exception:
+            pass
+        
         with st.spinner("🔍 Searching documents..."):
-            # Get RAG chain (lazy loaded) with course_id
-            chain = get_rag_chain(st.session_state.current_course)
+            # Get RAG chain (lazy loaded) with enforced course_id
+            course = st.session_state.get('assigned_course', st.session_state.current_course)
+            st.session_state.current_course = course
+            chain = get_rag_chain(course)
             
             # Optimize: Add timeout and better error handling
             import asyncio
