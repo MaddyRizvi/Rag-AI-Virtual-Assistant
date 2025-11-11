@@ -539,7 +539,9 @@ def student_interface():
     if quick_question:
         question = quick_question
     else:
-        question = st.chat_input("Ask about your course materials...", help="Ask anything about your uploaded course content")
+        # Older Streamlit versions don't support `help` on chat_input
+        # Keep compatibility by removing the help kwarg
+        question = st.chat_input("Ask about your course materials...")
     
     if question:
         ask_question_direct(question)
