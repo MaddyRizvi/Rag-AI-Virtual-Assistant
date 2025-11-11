@@ -115,12 +115,12 @@ model = AzureChatOpenAI(
 # Create the RAG chain (lazy loading)
 chain = None
 
-def get_rag_chain():
-    """Lazy load RAG chain"""
+def get_rag_chain(course_id: str = "general"):
+    """Lazy load RAG chain with course support"""
     global chain
     if chain is None:
         chain = (
-            RunnableParallel({"context": get_retriever(), "question": RunnablePassthrough()})
+            RunnableParallel({"context": get_retriever(course_id), "question": RunnablePassthrough()})
             | prompt
             | model
             | StrOutputParser()
