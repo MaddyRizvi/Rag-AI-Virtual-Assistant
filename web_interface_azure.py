@@ -270,6 +270,15 @@ def teacher_dashboard():
         st.session_state.chat_history = []
     if 'current_course' not in st.session_state:
         st.session_state.current_course = "general"
+    if 'courses' not in st.session_state:
+        st.session_state.courses = [
+            "general",
+            "math101",
+            "physics101",
+            "chemistry101",
+            "biology101",
+            "history101",
+        ]
     
     # Teacher-specific sidebar with full admin features
     with st.sidebar:
@@ -277,7 +286,7 @@ def teacher_dashboard():
         
         # Course selection
         st.subheader("🎯 Course Selection")
-        available_courses = ["general", "math101", "physics101", "chemistry101", "biology101", "history101"]
+        available_courses = st.session_state.courses
         selected_course = st.selectbox(
             "Select Course:",
             options=available_courses,
@@ -287,6 +296,29 @@ def teacher_dashboard():
         st.session_state.current_course = selected_course
         st.info(f"📍 Current course: `{selected_course}`")
         
+        # Create a new course
+        st.markdown("---")
+        st.text("Create a new course:")
+        new_course = st.text_input(
+            "New course ID",
+            placeholder="e.g., comp_sci_2025",
+            key="new_course_id_input"
+        )
+        if st.button("➕ Add Course", key="add_course_btn"):
+            sanitized = (new_course or "").strip()
+            import re
+            if not sanitized:
+                st.warning("Please enter a course ID.")
+            elif not re.match(r"^[A-Za-z0-9_-]{2,64}$", sanitized):
+                st.error("Course ID must be 2-64 chars: letters, numbers, '-' or '_'.")
+            else:
+                if sanitized not in st.session_state.courses:
+                    st.session_state.courses.append(sanitized)
+                    st.success(f"Added course '{sanitized}'.")
+                else:
+                    st.info("Course already exists. Selected it.")
+                st.session_state.current_course = sanitized
+
         # Document upload section
         st.subheader("📁 Upload Materials")
         
