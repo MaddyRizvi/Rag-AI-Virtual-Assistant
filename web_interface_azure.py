@@ -35,6 +35,47 @@ doc_processor = None
 rag_chains = {}  # Cache chains per course
 startup_error = None
 
+# --- Course persistence helpers ---
+def _courses_file_path() -> str:
+    """Return path to courses.json (configurable via COURSES_FILE)."""
+    path = os.environ.get("COURSES_FILE")
+    if not path:
+        data_dir = os.path.join(os.getcwd(), "data")
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+        except Exception:
+            # Fallback to CWD if data dir cannot be created
+            data_dir = os.getcwd()
+        path = os.path.join(data_dir, "courses.json")
+    return path
+
+def load_courses_from_disk(default=None) -> list:
+    """Load courses from disk, return default if missing or invalid."""
+    if default is None:
+        default = [
+            "general", "math101", "physics101", "chemistry101", "biology101", "history101"
+        ]
+    path = _courses_file_path()
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and all(isinstance(x, str) for x in data):
+                    return data
+        return default
+    except Exception:
+        return default
+
+def save_courses_to_disk(courses: list) -> bool:
+    """Persist courses to disk; return True on success."""
+    try:
+        path = _courses_file_path()
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(courses, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
 def get_doc_processor():
     """Lazy load document processor with error handling"""
     global doc_processor, startup_error
@@ -271,18 +312,9 @@ def teacher_dashboard():
     if 'current_course' not in st.session_state:
         st.session_state.current_course = "general"
     if 'courses' not in st.session_state:
-        st.session_state.courses = [
-            "general", "math101", "physics101", "chemistry101", "biology101", "history101"
-        ]
+        st.session_state.courses = load_courses_from_disk()
     if 'courses' not in st.session_state:
-        st.session_state.courses = [
-            "general",
-            "math101",
-            "physics101",
-            "chemistry101",
-            "biology101",
-            "history101",
-        ]
+        st.session_state.courses = load_courses_from_disk()
     
     # Teacher-specific sidebar with full admin features
     with st.sidebar:
@@ -298,6 +330,8 @@ def teacher_dashboard():
             key="course_selector"
         )
         st.session_state.current_course = selected_course
+        # Persist courses list on each render (idempotent)
+        save_courses_to_disk(st.session_state.courses)
         st.info(f"📍 Current course: `{selected_course}`")
         
         # Create a new course
