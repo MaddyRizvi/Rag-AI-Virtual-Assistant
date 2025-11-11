@@ -272,6 +272,10 @@ def teacher_dashboard():
         st.session_state.current_course = "general"
     if 'courses' not in st.session_state:
         st.session_state.courses = [
+            "general", "math101", "physics101", "chemistry101", "biology101", "history101"
+        ]
+    if 'courses' not in st.session_state:
+        st.session_state.courses = [
             "general",
             "math101",
             "physics101",
@@ -477,7 +481,7 @@ def student_interface():
         
         # Course selection
         st.subheader("🎯 Course Selection")
-        available_courses = ["general", "math101", "physics101", "chemistry101", "biology101", "history101"]
+        available_courses = st.session_state.courses
         selected_course = st.selectbox(
             "Select Course:",
             options=available_courses,
