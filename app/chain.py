@@ -32,12 +32,13 @@ def get_doc_processor():
 
 # Create a custom synchronous retriever to avoid async session issues
 class SyncRetriever(BaseRetriever):
+    # Allow Pydantic to accept custom types like DocumentProcessor
+    model_config = {"arbitrary_types_allowed": True}
+    
+    # Pydantic model fields
     doc_processor: DocumentProcessor
     course_id: str = "general"
-    
-    def __init__(self, doc_processor: DocumentProcessor, course_id: str = "general"):
-        super().__init__(doc_processor=doc_processor, course_id=course_id)
-    
+
     def _get_relevant_documents(self, query: str) -> List[Document]:
         """Synchronous document retrieval to avoid async session issues"""
         try:
