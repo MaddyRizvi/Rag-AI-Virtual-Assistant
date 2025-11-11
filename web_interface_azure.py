@@ -32,7 +32,7 @@ import asyncio
 
 # Initialize the document processor and chain (lazy loading for better startup)
 doc_processor = None
-rag_chain = None
+rag_chains = {}  # Cache chains per course
 startup_error = None
 
 def get_doc_processor():
@@ -49,19 +49,19 @@ def get_doc_processor():
             raise Exception(startup_error)
     return doc_processor
 
-def get_rag_chain():
-    """Lazy load RAG chain with error handling"""
-    global rag_chain, startup_error
-    if rag_chain is None:
+def get_rag_chain(course_id: str = "general"):
+    """Lazy load RAG chain with course support"""
+    global rag_chains, startup_error
+    if course_id not in rag_chains:
         try:
-            print("Initializing RAG chain...")
-            rag_chain = create_rag_chain()
+            print(f"Initializing RAG chain for course: {course_id}")
+            rag_chains[course_id] = create_rag_chain(course_id)
         except Exception as e:
             startup_error = f"RAG chain initialization failed: {str(e)}"
             print(f"ERROR: {startup_error}")
-            rag_chain = None
+            rag_chains[course_id] = None
             raise Exception(startup_error)
-    return rag_chain
+    return rag_chains[course_id]
 
 def check_startup_status():
     """Check if all components are properly initialized"""
