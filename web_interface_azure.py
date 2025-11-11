@@ -516,6 +516,14 @@ def student_interface():
         st.session_state.chat_history = []
     if 'current_course' not in st.session_state:
         st.session_state.current_course = "general"
+    # Ensure courses list exists before sidebar uses it
+    if 'courses' not in st.session_state:
+        try:
+            st.session_state.courses = load_courses_from_disk()
+        except Exception:
+            st.session_state.courses = [
+                "general", "math101", "physics101", "chemistry101", "biology101", "history101"
+            ]
     
     # Student sidebar with limited features
     with st.sidebar:
