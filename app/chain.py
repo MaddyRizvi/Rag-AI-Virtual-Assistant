@@ -55,7 +55,11 @@ def get_retriever(course_id: str = "general"):
     """Lazy load retriever for specific course"""
     global retrievers
     if course_id not in retrievers:
-        retrievers[course_id] = SyncRetriever(get_doc_processor(), course_id)
+        # Pydantic models require keyword arguments on init
+        retrievers[course_id] = SyncRetriever(
+            doc_processor=get_doc_processor(),
+            course_id=course_id,
+        )
     return retrievers[course_id]
 
 # RAG prompt
