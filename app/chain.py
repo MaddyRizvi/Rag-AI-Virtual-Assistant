@@ -33,11 +33,10 @@ def get_doc_processor():
 # Create a custom synchronous retriever to avoid async session issues
 class SyncRetriever(BaseRetriever):
     doc_processor: DocumentProcessor
-    course_id: str
+    course_id: str = "general"
     
     def __init__(self, doc_processor: DocumentProcessor, course_id: str = "general"):
-        super().__init__(doc_processor=doc_processor)
-        self.course_id = course_id
+        super().__init__(doc_processor=doc_processor, course_id=course_id)
     
     def _get_relevant_documents(self, query: str) -> List[Document]:
         """Synchronous document retrieval to avoid async session issues"""
