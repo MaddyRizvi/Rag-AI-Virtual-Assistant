@@ -195,9 +195,8 @@ def display_quiz(course_id: str):
             if isinstance(scores, list) and scores:
                 nums = [float(x) for x in scores[:total]]
                 final_percent = sum(nums) / len(nums)
-                    except Exception:
-                        pass
-
+        except Exception:
+            pass
 
         st.success(f"Your score: {final_percent:.0f}%")
 
