@@ -161,39 +161,66 @@ def display_quiz(course_id: str):
             actual_norm = (actual or "").strip().lower()
             if ans_norm and (actual_norm in ans_norm or ans_norm in actual_norm):
                 correct += 1
-        score = int(round((correct / max(1, total)) * 100))
-        st.success(f"Your score: {score}% ({correct}/{total})")
-        if score > 80:
+        score = correct
+        st.success(f"✅ Quiz submitted! You scored {score}/{total}.")
+        pct = int(round((correct / max(1, total)) * 100))
+        if pct > 80:
             st.info("Excellent!")
-        elif score >= 60:
+        elif pct >= 60:
             st.info("Good job, keep improving!")
         else:
             st.info("Needs review — revisit your notes!")
 
+        # Log with schema: student_id, course_id, score, total_questions, timestamp
         try:
             sid = get_student_id()
-            log_student_progress(sid, course_id, score)
+            log_student_progress(sid, course_id, score, total)
+        except Exception:
+            pass
+
+        # Show summary metrics
+        try:
+            dfp = pd.read_csv(_progress_file_path())
+            sid = get_student_id()
+            my_df = dfp[dfp['student_id'] == sid]
+            my_df = my_df[my_df['course_id'] == course_id]
+            avg_percent = None
+            if 'score' in my_df.columns and 'total_questions' in my_df.columns and len(my_df) > 0:
+                avg_percent = float((my_df['score'] / my_df['total_questions']).mean() * 100.0)
+            elif 'quiz_score' in my_df.columns and len(my_df) > 0:
+                # Legacy support: quiz_score treated as percent
+                avg_percent = float(my_df['quiz_score'].mean())
+            if avg_percent is not None:
+                st.metric("Last Quiz Score", f"{score}/{total}")
+                st.metric("Average Score", f"{avg_percent:.1f}")
         except Exception:
             pass
 
 # --- Student progress helpers ---
 def _progress_file_path() -> str:
-    return os.path.join(os.getcwd(), "student_progress.csv")
+    """Return path to student_progress.csv in ./data or CWD fallback."""
+    data_dir = os.path.join(os.getcwd(), "data")
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except Exception:
+        data_dir = os.getcwd()
+    return os.path.join(data_dir, "student_progress.csv")
 
-def log_student_progress(student_id: str, course_id: str, quiz_score: int) -> None:
-    """Append a quiz attempt to student_progress.csv."""
+def log_student_progress(student_id: str, course_id: str, score: int, total_questions: int) -> None:
+    """Append a quiz attempt to student_progress.csv with required schema."""
     try:
         path = _progress_file_path()
         file_exists = os.path.exists(path)
         with open(path, mode="a", encoding="utf-8", newline="") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["student_id", "course_id", "quiz_score", "timestamp"])
+                writer.writerow(["student_id", "course_id", "score", "total_questions", "timestamp"])
             from datetime import datetime
             writer.writerow([
                 (student_id or "anonymous"),
                 course_id,
-                int(quiz_score),
+                int(score),
+                int(total_questions),
                 datetime.utcnow().isoformat(timespec="seconds") + "Z",
             ])
     except Exception:
