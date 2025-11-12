@@ -85,14 +85,14 @@ def _logs_file_path() -> str:
     return os.path.join(os.getcwd(), "logs.csv")
 
 def log_student_query(role: str, course_id: str, question: str, answer_length: int) -> None:
-    """Append a row to logs.csv with timestamp, role, course_id, question, answer_length."""
+    """Append a row to logs.csv with timestamp, role, course_id, question, response_length."""
     try:
         path = _logs_file_path()
         file_exists = os.path.exists(path)
         with open(path, mode="a", encoding="utf-8", newline="") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["timestamp", "role", "course_id", "question", "answer_length"])
+                writer.writerow(["timestamp", "role", "course_id", "question", "response_length"])
             from datetime import datetime
             writer.writerow([
                 datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -198,27 +198,6 @@ def display_quiz(course_id: str):
                     except Exception:
                         pass
 
-        # Enhanced My Progress (updated metrics)
-        st.markdown("---")
-        st.subheader("📈 My Progress (Updated)")
-        try:
-            dfp2 = pd.read_csv(_progress_file_path())
-            sid2 = get_student_id()
-            cur2 = dfp2[(dfp2.get('student_id') == sid2) & (dfp2.get('course_id') == course_id)] if not dfp2.empty else pd.DataFrame()
-            if cur2.empty or 'score' not in cur2.columns:
-                st.info("No progress data available yet.")
-            else:
-                avg2 = float(pd.to_numeric(cur2['score'], errors='coerce').dropna().mean())
-                st.metric("Average Score", f"{avg2:.1f}%")
-                st.progress(min(max(int(round(avg2)), 0), 100) / 100)
-                if avg2 >= 80:
-                    st.success("Excellent progress! Keep it up.")
-                elif avg2 >= 60:
-                    st.info("Good job! Review topics for higher scores.")
-                else:
-                    st.warning("Needs review. Try another quiz.")
-        except Exception:
-            pass
 
         st.success(f"Your score: {final_percent:.0f}%")
 
@@ -1067,10 +1046,9 @@ def student_interface():
                     pass
     else:
         pass
-
-    # My Progress section
+    # My Progress section (consolidated)
     st.markdown("---")
-    st.subheader("📈 My Progress")
+    st.subheader("?? My Progress")
     progress_path = _progress_file_path()
     if not os.path.exists(progress_path):
         st.info("No progress data available yet.")
@@ -1078,27 +1056,38 @@ def student_interface():
         try:
             dfp = pd.read_csv(progress_path)
             sid = get_student_id()
-            my_df = dfp[dfp['student_id'] == sid].copy() if 'student_id' in dfp.columns else pd.DataFrame()
-            if my_df.empty:
-                st.info("No progress data for your account yet.")
+            cur = dfp[(dfp.get('student_id') == sid) & (dfp.get('course_id') == course_id)] if not dfp.empty else pd.DataFrame()
+            if cur.empty:
+                st.info("No progress data available yet.")
             else:
-                cur = my_df[my_df['course_id'] == course_id]
-                if not cur.empty:
-                    avg_score = float(cur['quiz_score'].mean()) if 'quiz_score' in cur.columns else 0.0
-                    latest_ts = str(cur['timestamp'].max()) if 'timestamp' in cur.columns else "N/A"
-                    st.metric("Average Score (this course)", f"{avg_score:.1f}%")
-                    st.caption(f"Latest quiz date: {latest_ts}")
-                    st.progress(min(max(int(round(avg_score)), 0), 100) / 100)
-
-                hist = my_df.copy()
-                if not hist.empty and 'quiz_score' in hist.columns and 'timestamp' in hist.columns:
+                if 'score' in cur.columns:
+                    avg_percent = float(pd.to_numeric(cur['score'], errors='coerce').dropna().mean())
+                elif 'quiz_score' in cur.columns:
+                    avg_percent = float(pd.to_numeric(cur['quiz_score'], errors='coerce').dropna().mean())
+                else:
+                    avg_percent = 0.0
+                latest_ts = str(cur['timestamp'].max()) if 'timestamp' in cur.columns else "N/A"
+                st.metric("Average Score", f"{avg_percent:.1f}%")
+                st.caption(f"Latest quiz date: {latest_ts}")
+                st.progress(min(max(int(round(avg_percent)), 0), 100) / 100)
+                if avg_percent >= 80:
+                    st.success("Excellent progress! Keep it up.")
+                elif avg_percent >= 60:
+                    st.info("Good job! Review topics for higher scores.")
+                else:
+                    st.warning("Needs review. Try another quiz.")
+                if 'timestamp' in cur.columns:
                     try:
+                        hist = cur.copy()
                         hist['timestamp'] = pd.to_datetime(hist['timestamp'], errors='coerce')
-                        hist = hist.dropna(subset=['timestamp'])
-                        hist = hist.sort_values('timestamp')
+                        hist = hist.dropna(subset=['timestamp']).sort_values('timestamp')
+                        series = pd.to_numeric(hist['score'] if 'score' in hist.columns else hist['quiz_score'], errors='coerce')
                         st.caption("Quiz score history")
-                        st.line_chart(hist.set_index('timestamp')['quiz_score'])
+                        st.line_chart(series.set_axis(hist['timestamp']))
                     except Exception:
+                        pass
+        except Exception as e:
+            st.warning(f"Unable to load progress: {str(e)}")
                         pass
         except Exception as e:
             st.warning(f"Unable to load progress: {str(e)}")
