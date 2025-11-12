@@ -765,12 +765,7 @@ def teacher_dashboard():
         if st.button("📊 View Statistics", key="teacher_stats_btn", help="View system statistics and usage"):
             show_statistics_direct()
         
-        # Chat management
-        if st.button("🗑️ Clear All Chats", key="teacher_clear_all_btn", help="Clear all chat histories"):
-            st.session_state.chat_history = []
-            st.success("All chat histories cleared!")
-        
-        # System info
+        # Chat management (moved to Quick Actions panel)\n# System info
         st.markdown("---")
         st.subheader("ℹ️ System Info")
         st.info(f"🔑 Role: Teacher (Admin Access)")
@@ -832,9 +827,9 @@ def teacher_dashboard():
         
         # Quick actions
         st.subheader("🚀 Quick Actions")
-        if st.button("🔄 Refresh System", key="refresh_btn"):
-            st.rerun()
-        
+        if st.button("??? Clear All Chats", key="teacher_clear_all_btn", help="Clear all chat histories"):
+            st.session_state.chat_history = []
+            st.success("All chat histories cleared!")
         if st.button("📋 Export Logs", key="export_logs_btn"):
             if st.session_state.chat_history:
                 logs = json.dumps(st.session_state.chat_history, indent=2)
@@ -1322,6 +1317,7 @@ if __name__ == "__main__":
     
     # Run the Streamlit interface
     main()
+
 
 
 
