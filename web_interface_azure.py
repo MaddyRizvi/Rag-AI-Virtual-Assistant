@@ -121,6 +121,61 @@ def get_azure_chat_model() -> AzureChatOpenAI:
         api_version=api_version,
     )
 
+# --- Quiz display helper for Student UI ---
+def display_quiz(course_id: str):
+    """Render quiz form for the given course_id based on generated CSV."""
+    quiz_path = os.path.join(os.getcwd(), "generated_quizzes", f"{course_id}_quiz.csv")
+    if not os.path.exists(quiz_path):
+        st.info("No quiz found for this course yet.")
+        return
+    import csv as _csv
+    rows = []
+    try:
+        with open(quiz_path, "r", encoding="utf-8") as f:
+            reader = _csv.reader(f)
+            data = list(reader)
+            if data and len(data[0]) >= 2 and "question" in data[0][0].lower():
+                data = data[1:]
+            for r in data:
+                if len(r) >= 2:
+                    rows.append((r[0], r[1]))
+    except Exception:
+        rows = []
+
+    if not rows:
+        st.info("Quiz not available for this course yet.")
+        return
+
+    with st.form("take_quiz_form", clear_on_submit=False):
+        user_answers = []
+        for idx, (q, a) in enumerate(rows[:5]):
+            st.write(f"Q{idx+1}: {q}")
+            ans = st.text_input(f"Your answer {idx+1}", key=f"quiz_ans_{idx}")
+            user_answers.append((ans, a))
+        submitted = st.form_submit_button("Submit Quiz")
+    if submitted:
+        correct = 0
+        total = min(5, len(user_answers))
+        for ans, actual in user_answers[:total]:
+            ans_norm = (ans or "").strip().lower()
+            actual_norm = (actual or "").strip().lower()
+            if ans_norm and (actual_norm in ans_norm or ans_norm in actual_norm):
+                correct += 1
+        score = int(round((correct / max(1, total)) * 100))
+        st.success(f"Your score: {score}% ({correct}/{total})")
+        if score > 80:
+            st.info("Excellent!")
+        elif score >= 60:
+            st.info("Good job, keep improving!")
+        else:
+            st.info("Needs review — revisit your notes!")
+
+        try:
+            sid = get_student_id()
+            log_student_progress(sid, course_id, score)
+        except Exception:
+            pass
+
 # --- Student progress helpers ---
 def _progress_file_path() -> str:
     return os.path.join(os.getcwd(), "student_progress.csv")
@@ -817,8 +872,10 @@ def student_interface():
     st.subheader("📝 Take Quiz")
     st.caption("Answer 5 questions from your course quiz (if available)")
     course_id = st.session_state.get('assigned_course', st.session_state.current_course)
+    if st.button("🎯 Take Quiz", key="student_take_quiz"):
+        display_quiz(course_id)
     quiz_path = os.path.join(os.getcwd(), "generated_quizzes", f"{course_id}_quiz.csv")
-    if os.path.exists(quiz_path):
+    if False and os.path.exists(quiz_path):
         import csv as _csv
         rows = []
         try:
@@ -866,7 +923,7 @@ def student_interface():
                 except Exception:
                     pass
     else:
-        st.info("No quiz found for this course yet.")
+        pass
 
     # My Progress section
     st.markdown("---")
