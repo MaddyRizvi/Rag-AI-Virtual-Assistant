@@ -662,6 +662,48 @@ def teacher_dashboard():
             except Exception as e:
                 st.warning(f"Analytics not available: {str(e)}")
 
+        # Student progress analytics (quiz marks)
+        try:
+            sp_path = _progress_file_path()
+            if os.path.exists(sp_path):
+                dfp = pd.read_csv(sp_path)
+                if not dfp.empty:
+                    # Overall average quiz score
+                    if 'score' in dfp.columns and 'total_questions' in dfp.columns:
+                        overall_avg = float((dfp['score'] / dfp['total_questions']).mean() * 100.0)
+                        st.metric("Avg Quiz Score", f"{overall_avg:.2f}")
+                        st.caption("Average quiz score per course")
+                        st.bar_chart((dfp.assign(percent=(dfp['score']/dfp['total_questions']*100.0))).groupby('course_id')['percent'].mean())
+                    elif 'quiz_score' in dfp.columns:
+                        st.metric("Avg Quiz Score", f"{float(dfp['quiz_score'].mean()):.2f}")
+                        st.caption("Average quiz score per course")
+                        st.bar_chart(dfp.groupby('course_id')['quiz_score'].mean())
+
+                    # Selected course table and metrics
+                    selected = selected_course if 'selected_course' in locals() else st.session_state.get('current_course','general')
+                    course_df = dfp[dfp.get('course_id') == selected]
+                    if not course_df.empty:
+                        if 'score' in course_df.columns and 'total_questions' in course_df.columns:
+                            perc = (course_df['score']/course_df['total_questions'])*100.0
+                            avg_score = float(perc.mean())
+                            hi = float(perc.max())
+                            lo = float(perc.min())
+                        elif 'quiz_score' in course_df.columns:
+                            avg_score = float(course_df['quiz_score'].mean())
+                            hi = float(course_df['quiz_score'].max())
+                            lo = float(course_df['quiz_score'].min())
+                        else:
+                            avg_score = 0.0; hi=0.0; lo=0.0
+                        students_attempted = course_df['student_id'].nunique() if 'student_id' in course_df.columns else len(course_df)
+                        last_ts = str(course_df['timestamp'].max()) if 'timestamp' in course_df.columns else "N/A"
+                        st.metric("Avg Score (selected)", f"{avg_score:.1f}")
+                        st.metric("Students Attempted", students_attempted)
+                        st.metric("Last Submission", last_ts)
+                        st.caption(f"Highest: {hi:.1f} • Lowest: {lo:.1f}")
+                        st.dataframe(course_df, use_container_width=True)
+        except Exception:
+            pass
+
         st.markdown("---")
 
         # Admin controls
@@ -722,7 +764,7 @@ def teacher_dashboard():
             ask_question_direct(question)
     
     with col2:
-        st.header("📈 Quick Stats")
+        st.header("📈 Learning Analytics")
         
         # Quick statistics
         chat_count = len(st.session_state.chat_history)
@@ -1221,3 +1263,4 @@ if __name__ == "__main__":
     
     # Run the Streamlit interface
     main()
+
