@@ -23,6 +23,8 @@ load_dotenv()
 from app.document_processor import DocumentProcessor
 from app.chain import create_rag_chain
 from langchain_core.documents import Document
+from langchain_openai import AzureChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
@@ -75,6 +77,22 @@ def save_courses_to_disk(courses: list) -> bool:
         return True
     except Exception:
         return False
+
+# --- Azure OpenAI helper ---
+def get_azure_chat_model() -> AzureChatOpenAI:
+    deployment = os.environ.get("AZ_OPENAI_CHAT_DEPLOYMENT", "gpt-4o")
+    endpoint = os.environ.get("AZ_OPENAI_ENDPOINT")
+    api_key = os.environ.get("AZ_OPENAI_API_KEY")
+    api_version = os.environ.get("AZ_OPENAI_API_VERSION", "2024-12-01-preview")
+    if not endpoint or not api_key:
+        raise ValueError("Azure OpenAI credentials missing: set AZ_OPENAI_ENDPOINT and AZ_OPENAI_API_KEY")
+    return AzureChatOpenAI(
+        temperature=0,
+        azure_deployment=deployment,
+        azure_endpoint=endpoint,
+        api_key=api_key,
+        api_version=api_version,
+    )
 
 def get_doc_processor():
     """Lazy load document processor with error handling"""
@@ -419,9 +437,58 @@ def teacher_dashboard():
                 upload_files_direct(uploaded_files)
             else:
                 st.warning("Please select files to upload.")
-        
+
+        # Quiz generation section
         st.markdown("---")
-        
+        st.subheader("🧠 Generate Quiz")
+        st.caption("Generate 5 short Q&A from current course materials")
+        if st.button("📝 Generate Quiz", key="generate_quiz_btn"):
+            course_id = st.session_state.get("current_course", "general")
+            try:
+                with st.spinner("Generating quiz..."):
+                    processor = get_doc_processor()
+                    results = processor.search_documents(query=course_id, course_id=course_id, k=5) or []
+                    if not results:
+                        st.warning("No documents found for this course.")
+                    else:
+                        context_text = "\n\n".join([getattr(d, "page_content", str(d)) for d in results])
+                        prompt_msgs = [
+                            SystemMessage(content=(
+                                "You are an assistant that creates concise quizzes. "
+                                "Given course material, generate exactly 5 short quiz questions with their correct answers. "
+                                "Format each as 'Qn: <question>' followed by 'An: <answer>'."
+                            )),
+                            HumanMessage(content=(
+                                f"Course ID: {course_id}\n\n"
+                                "Course material excerpts:\n" + context_text + "\n\n"
+                                "Generate 5 short quiz questions (with correct answers) from this course material."
+                            )),
+                        ]
+                        model = get_azure_chat_model()
+                        resp = model.invoke(prompt_msgs)
+                        quiz_text = getattr(resp, "content", str(resp))
+
+                        out_dir = os.path.join(os.getcwd(), "generated_quizzes")
+                        os.makedirs(out_dir, exist_ok=True)
+                        out_path = os.path.join(out_dir, f"{course_id}_quiz.txt")
+                        with open(out_path, "w", encoding="utf-8") as f:
+                            f.write(quiz_text)
+
+                        st.success("Quiz generated successfully.")
+                        with st.expander("View Generated Quiz", expanded=True):
+                            st.text(quiz_text)
+                        st.download_button(
+                            label="Download Quiz (.txt)",
+                            data=quiz_text,
+                            file_name=f"{course_id}_quiz.txt",
+                            mime="text/plain",
+                            key="download_quiz_btn",
+                        )
+            except Exception as e:
+                st.error(f"❌ Failed to generate quiz: {str(e)}")
+
+        st.markdown("---")
+
         # Admin controls
         st.subheader("⚙️ Admin Controls")
         
