@@ -441,7 +441,7 @@ def teacher_dashboard():
         # Quiz generation section
         st.markdown("---")
         st.subheader("🧠 Generate Quiz")
-        st.caption("Generate 5 short Q&A from current course materials")
+        st.caption("Generate 5 short Q&A as CSV from current course materials")
         if st.button("📝 Generate Quiz", key="generate_quiz_btn"):
             course_id = st.session_state.get("current_course", "general")
             try:
@@ -454,14 +454,15 @@ def teacher_dashboard():
                         context_text = "\n\n".join([getattr(d, "page_content", str(d)) for d in results])
                         prompt_msgs = [
                             SystemMessage(content=(
-                                "You are an assistant that creates concise quizzes. "
-                                "Given course material, generate exactly 5 short quiz questions with their correct answers. "
-                                "Format each as 'Qn: <question>' followed by 'An: <answer>'."
+                                "You create concise quizzes in CSV format. "
+                                "Output exactly 5 rows with header 'Question,Answer'. "
+                                "Each row contains a short question and its correct answer. "
+                                "Do not include explanations, code fences, or extra commentary."
                             )),
                             HumanMessage(content=(
                                 f"Course ID: {course_id}\n\n"
                                 "Course material excerpts:\n" + context_text + "\n\n"
-                                "Generate 5 short quiz questions (with correct answers) from this course material."
+                                "Generate 5 short quiz questions (with correct answers) as CSV with header 'Question,Answer'."
                             )),
                         ]
                         model = get_azure_chat_model()
@@ -470,18 +471,18 @@ def teacher_dashboard():
 
                         out_dir = os.path.join(os.getcwd(), "generated_quizzes")
                         os.makedirs(out_dir, exist_ok=True)
-                        out_path = os.path.join(out_dir, f"{course_id}_quiz.txt")
+                        out_path = os.path.join(out_dir, f"{course_id}_quiz.csv")
                         with open(out_path, "w", encoding="utf-8") as f:
                             f.write(quiz_text)
 
                         st.success("Quiz generated successfully.")
-                        with st.expander("View Generated Quiz", expanded=True):
+                        with st.expander("View Generated Quiz (CSV)", expanded=True):
                             st.text(quiz_text)
                         st.download_button(
-                            label="Download Quiz (.txt)",
+                            label="Download Quiz (.csv)",
                             data=quiz_text,
-                            file_name=f"{course_id}_quiz.txt",
-                            mime="text/plain",
+                            file_name=f"{course_id}_quiz.csv",
+                            mime="text/csv",
                             key="download_quiz_btn",
                         )
             except Exception as e:
