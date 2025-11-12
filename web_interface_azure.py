@@ -1087,9 +1087,6 @@ def student_interface():
                         pass
         except Exception as e:
             st.warning(f"Unable to load progress: {str(e)}")
-                        pass
-        except Exception as e:
-            st.warning(f"Unable to load progress: {str(e)}")
 
 # Main routing function
 def main():
