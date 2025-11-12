@@ -31,6 +31,8 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+import pandas as pd
+import csv
 
 # Initialize the document processor and chain (lazy loading for better startup)
 doc_processor = None
@@ -77,6 +79,31 @@ def save_courses_to_disk(courses: list) -> bool:
         return True
     except Exception:
         return False
+
+# --- Logging helper for analytics ---
+def _logs_file_path() -> str:
+    return os.path.join(os.getcwd(), "logs.csv")
+
+def log_student_query(role: str, course_id: str, question: str, answer_length: int) -> None:
+    """Append a row to logs.csv with timestamp, role, course_id, question, answer_length."""
+    try:
+        path = _logs_file_path()
+        file_exists = os.path.exists(path)
+        with open(path, mode="a", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["timestamp", "role", "course_id", "question", "answer_length"])
+            from datetime import datetime
+            writer.writerow([
+                datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                role,
+                course_id,
+                question.replace("\n", " ").strip(),
+                int(answer_length),
+            ])
+    except Exception:
+        # Non-fatal: logging should not break the app
+        pass
 
 # --- Azure OpenAI helper ---
 def get_azure_chat_model() -> AzureChatOpenAI:
@@ -490,6 +517,35 @@ def teacher_dashboard():
 
         st.markdown("---")
 
+        # Learning Analytics
+        st.subheader("📊 Learning Analytics")
+        logs_path = _logs_file_path()
+        if not os.path.exists(logs_path):
+            st.info("No analytics data available")
+        else:
+            try:
+                df = pd.read_csv(logs_path)
+                if df.empty or 'role' not in df.columns:
+                    st.info("No analytics data available")
+                else:
+                    sdf = df[df['role'] == 'student'].copy()
+                    total_q = int(len(sdf))
+                    st.metric(label="Total Student Queries", value=total_q)
+                    if total_q > 0:
+                        per_course = sdf.groupby('course_id').size().rename('queries')
+                        st.caption("Queries per course")
+                        st.bar_chart(per_course)
+                        if 'answer_length' in sdf.columns:
+                            avg_len = sdf.groupby('course_id')['answer_length'].mean()
+                            st.caption("Average response length per course")
+                            st.bar_chart(avg_len)
+                    else:
+                        st.info("No student queries logged yet")
+            except Exception as e:
+                st.warning(f"Analytics not available: {str(e)}")
+
+        st.markdown("---")
+
         # Admin controls
         st.subheader("⚙️ Admin Controls")
         
@@ -725,6 +781,8 @@ def main():
     # Get role from URL parameters or query parameters
     query_params = st.query_params
     role = query_params.get('role', 'student').lower()  # Default to student for safety
+    # Persist role in session for downstream logic
+    st.session_state.role = role
     
     # Route to appropriate interface based on role
     if role == 'teacher':
@@ -898,6 +956,15 @@ def ask_question_direct(question: str):
             
             # Add to chat history
             st.session_state.chat_history.append((question, result))
+
+            # Learning analytics logging (only for student role)
+            try:
+                role = st.session_state.get('role', 'student')
+                if role == 'student':
+                    ans_text = result if isinstance(result, str) else str(result)
+                    log_student_query(role, course, question, len(ans_text))
+            except Exception:
+                pass
             
             # Update UI immediately without full rerun for better performance
             st.rerun()
