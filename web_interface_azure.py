@@ -121,6 +121,42 @@ def get_azure_chat_model() -> AzureChatOpenAI:
         api_version=api_version,
     )
 
+# --- Student progress helpers ---
+def _progress_file_path() -> str:
+    return os.path.join(os.getcwd(), "student_progress.csv")
+
+def log_student_progress(student_id: str, course_id: str, quiz_score: int) -> None:
+    """Append a quiz attempt to student_progress.csv."""
+    try:
+        path = _progress_file_path()
+        file_exists = os.path.exists(path)
+        with open(path, mode="a", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["student_id", "course_id", "quiz_score", "timestamp"])
+            from datetime import datetime
+            writer.writerow([
+                (student_id or "anonymous"),
+                course_id,
+                int(quiz_score),
+                datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            ])
+    except Exception:
+        pass
+
+def get_student_id() -> str:
+    """Resolve student_id from query params or environment; fallback to 'anonymous'."""
+    try:
+        qp = getattr(st, "query_params", {})
+        if qp and qp.get("student_id"):
+            return str(qp.get("student_id")).strip()
+    except Exception:
+        pass
+    env_id = os.environ.get("STUDENT_ID")
+    if env_id:
+        return env_id.strip()
+    return "anonymous"
+
 def get_doc_processor():
     """Lazy load document processor with error handling"""
     global doc_processor, startup_error
@@ -775,6 +811,97 @@ def student_interface():
     
     if question:
         ask_question_direct(question)
+
+    # Take Quiz section (uses generated CSV quiz for current course)
+    st.markdown("---")
+    st.subheader("📝 Take Quiz")
+    st.caption("Answer 5 questions from your course quiz (if available)")
+    course_id = st.session_state.get('assigned_course', st.session_state.current_course)
+    quiz_path = os.path.join(os.getcwd(), "generated_quizzes", f"{course_id}_quiz.csv")
+    if os.path.exists(quiz_path):
+        import csv as _csv
+        rows = []
+        try:
+            with open(quiz_path, "r", encoding="utf-8") as f:
+                reader = _csv.reader(f)
+                data = list(reader)
+                if data and len(data[0]) >= 2 and "question" in data[0][0].lower():
+                    data = data[1:]
+                for r in data:
+                    if len(r) >= 2:
+                        rows.append((r[0], r[1]))
+        except Exception:
+            rows = []
+
+        if not rows:
+            st.info("Quiz not available for this course yet.")
+        else:
+            with st.form("take_quiz_form", clear_on_submit=False):
+                user_answers = []
+                for idx, (q, a) in enumerate(rows[:5]):
+                    st.write(f"Q{idx+1}: {q}")
+                    ans = st.text_input(f"Your answer {idx+1}", key=f"quiz_ans_{idx}")
+                    user_answers.append((ans, a))
+                submitted = st.form_submit_button("Submit Quiz")
+            if submitted:
+                correct = 0
+                total = min(5, len(user_answers))
+                for ans, actual in user_answers[:total]:
+                    ans_norm = (ans or "").strip().lower()
+                    actual_norm = (actual or "").strip().lower()
+                    if ans_norm and (actual_norm in ans_norm or ans_norm in actual_norm):
+                        correct += 1
+                score = int(round((correct / max(1, total)) * 100))
+                st.success(f"Your score: {score}% ({correct}/{total})")
+                if score > 80:
+                    st.info("Excellent!")
+                elif score >= 60:
+                    st.info("Good job, keep improving!")
+                else:
+                    st.info("Needs review — revisit your notes!")
+
+                try:
+                    sid = get_student_id()
+                    log_student_progress(sid, course_id, score)
+                except Exception:
+                    pass
+    else:
+        st.info("No quiz found for this course yet.")
+
+    # My Progress section
+    st.markdown("---")
+    st.subheader("📈 My Progress")
+    progress_path = _progress_file_path()
+    if not os.path.exists(progress_path):
+        st.info("No progress data available yet.")
+    else:
+        try:
+            dfp = pd.read_csv(progress_path)
+            sid = get_student_id()
+            my_df = dfp[dfp['student_id'] == sid].copy() if 'student_id' in dfp.columns else pd.DataFrame()
+            if my_df.empty:
+                st.info("No progress data for your account yet.")
+            else:
+                cur = my_df[my_df['course_id'] == course_id]
+                if not cur.empty:
+                    avg_score = float(cur['quiz_score'].mean()) if 'quiz_score' in cur.columns else 0.0
+                    latest_ts = str(cur['timestamp'].max()) if 'timestamp' in cur.columns else "N/A"
+                    st.metric("Average Score (this course)", f"{avg_score:.1f}%")
+                    st.caption(f"Latest quiz date: {latest_ts}")
+                    st.progress(min(max(int(round(avg_score)), 0), 100) / 100)
+
+                hist = my_df.copy()
+                if not hist.empty and 'quiz_score' in hist.columns and 'timestamp' in hist.columns:
+                    try:
+                        hist['timestamp'] = pd.to_datetime(hist['timestamp'], errors='coerce')
+                        hist = hist.dropna(subset=['timestamp'])
+                        hist = hist.sort_values('timestamp')
+                        st.caption("Quiz score history")
+                        st.line_chart(hist.set_index('timestamp')['quiz_score'])
+                    except Exception:
+                        pass
+        except Exception as e:
+            st.warning(f"Unable to load progress: {str(e)}")
 
 # Main routing function
 def main():
