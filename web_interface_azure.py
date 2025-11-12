@@ -153,48 +153,110 @@ def display_quiz(course_id: str):
             ans = st.text_input(f"Your answer {idx+1}", key=f"quiz_ans_{idx}")
             user_answers.append((ans, a))
         submitted = st.form_submit_button("Submit Quiz")
-    if submitted:
-        correct = 0
+    if submitted and st.session_state.get('role', 'student') == 'student':
+        # Simple marking with exact and partial keyword matches
         total = min(5, len(user_answers))
+        total_points = 0.0
+        import re
         for ans, actual in user_answers[:total]:
             ans_norm = (ans or "").strip().lower()
-            actual_norm = (actual or "").strip().lower()
-            if ans_norm and (actual_norm in ans_norm or ans_norm in actual_norm):
-                correct += 1
-        score = correct
-        st.success(f"✅ Quiz submitted! You scored {score}/{total}.")
-        pct = int(round((correct / max(1, total)) * 100))
-        if pct > 80:
-            st.info("Excellent!")
-        elif pct >= 60:
-            st.info("Good job, keep improving!")
-        else:
-            st.info("Needs review — revisit your notes!")
+            act_norm = (actual or "").strip().lower()
+            if not ans_norm:
+                continue
+            if ans_norm == act_norm or act_norm in ans_norm or ans_norm in act_norm:
+                total_points += 1.0
+                continue
+            tokens_ans = set([t for t in re.split(r"[^a-z0-9]+", ans_norm) if len(t) > 2])
+            tokens_act = set([t for t in re.split(r"[^a-z0-9]+", act_norm) if len(t) > 2])
+            if tokens_ans.intersection(tokens_act):
+                total_points += 0.5
+        keyword_percent = (total_points / max(1, total)) * 100.0
 
-        # Log with schema: student_id, course_id, score, total_questions, timestamp
+        # Optional semantic grading with Azure OpenAI (fallback to keyword)
+        final_percent = keyword_percent
         try:
-            sid = get_student_id()
-            log_student_progress(sid, course_id, score, total)
+            model = get_azure_chat_model()
+            from langchain_core.messages import SystemMessage, HumanMessage
+            import json as _json
+            items = []
+            for idx, (ans, actual) in enumerate(user_answers[:total], start=1):
+                items.append({"q": idx, "student_answer": ans or "", "correct_answer": actual or ""})
+            msgs = [
+                SystemMessage(content=(
+                    "Grade each answer from 0-100 based on correctness and completeness. "
+                    "Return ONLY a JSON array of numbers (no text)."
+                )),
+                HumanMessage(content=_json.dumps(items)),
+            ]
+            resp = model.invoke(msgs)
+            content = getattr(resp, "content", str(resp))
+            import json as __json
+            scores = __json.loads(content)
+            if isinstance(scores, list) and scores:
+                nums = [float(x) for x in scores[:total]]
+                final_percent = sum(nums) / len(nums)
+                    except Exception:
+                        pass
+
+        # Enhanced My Progress (updated metrics)
+        st.markdown("---")
+        st.subheader("📈 My Progress (Updated)")
+        try:
+            dfp2 = pd.read_csv(_progress_file_path())
+            sid2 = get_student_id()
+            cur2 = dfp2[(dfp2.get('student_id') == sid2) & (dfp2.get('course_id') == course_id)] if not dfp2.empty else pd.DataFrame()
+            if cur2.empty or 'score' not in cur2.columns:
+                st.info("No progress data available yet.")
+            else:
+                avg2 = float(pd.to_numeric(cur2['score'], errors='coerce').dropna().mean())
+                st.metric("Average Score", f"{avg2:.1f}%")
+                st.progress(min(max(int(round(avg2)), 0), 100) / 100)
+                if avg2 >= 80:
+                    st.success("Excellent progress! Keep it up.")
+                elif avg2 >= 60:
+                    st.info("Good job! Review topics for higher scores.")
+                else:
+                    st.warning("Needs review. Try another quiz.")
         except Exception:
             pass
 
-        # Show summary metrics
+        st.success(f"Your score: {final_percent:.0f}%")
+
+        # Append to student_progress.csv (timestamp, student_id, course_id, score)
+        try:
+            from datetime import datetime
+            path = _progress_file_path()
+            file_exists = os.path.exists(path)
+            import csv as __csv
+            with open(path, mode="a", encoding="utf-8", newline="") as f:
+                writer = __csv.writer(f)
+                if not file_exists:
+                    writer.writerow(["timestamp", "student_id", "course_id", "score"])  # percent 0-100
+                writer.writerow([datetime.utcnow().isoformat(timespec="seconds") + "Z", "student001", course_id, round(final_percent, 2)])
+            st.info("Progress saved successfully.")
+        except Exception:
+            st.warning("Could not save progress.")
+
+        # Recompute and show quick summary metrics
         try:
             dfp = pd.read_csv(_progress_file_path())
-            sid = get_student_id()
-            my_df = dfp[dfp['student_id'] == sid]
-            my_df = my_df[my_df['course_id'] == course_id]
-            avg_percent = None
-            if 'score' in my_df.columns and 'total_questions' in my_df.columns and len(my_df) > 0:
-                avg_percent = float((my_df['score'] / my_df['total_questions']).mean() * 100.0)
-            elif 'quiz_score' in my_df.columns and len(my_df) > 0:
-                # Legacy support: quiz_score treated as percent
-                avg_percent = float(my_df['quiz_score'].mean())
-            if avg_percent is not None:
-                st.metric("Last Quiz Score", f"{score}/{total}")
-                st.metric("Average Score", f"{avg_percent:.1f}")
+            my_df = dfp[(dfp.get('student_id') == 'student001') & (dfp.get('course_id') == course_id)]
+            if not my_df.empty:
+                avg_percent = float(my_df['score'].astype(float).mean()) if 'score' in my_df.columns else None
+                if avg_percent is not None:
+                    st.metric("Last Quiz Score", f"{int(round(final_percent))}%")
+                    st.metric("Average Score", f"{avg_percent:.1f}")
         except Exception:
             pass
+
+        # Refresh to update analytics elsewhere
+        try:
+            st.rerun()
+        except Exception:
+            try:
+                st.experimental_rerun()
+            except Exception:
+                pass
 
 # --- Student progress helpers ---
 def _progress_file_path() -> str:
@@ -653,8 +715,10 @@ def teacher_dashboard():
                         per_course = sdf.groupby('course_id').size().rename('queries')
                         st.caption("Queries per course")
                         st.bar_chart(per_course)
-                        if 'answer_length' in sdf.columns:
-                            avg_len = sdf.groupby('course_id')['answer_length'].mean()
+                        # Average response length per course (supports legacy column name)
+                        resp_col = 'response_length' if 'response_length' in sdf.columns else ('answer_length' if 'answer_length' in sdf.columns else None)
+                        if resp_col:
+                            avg_len = sdf.groupby('course_id')[resp_col].mean()
                             st.caption("Average response length per course")
                             st.bar_chart(avg_len)
                     else:
@@ -703,6 +767,16 @@ def teacher_dashboard():
                         st.dataframe(course_df, use_container_width=True)
         except Exception:
             pass
+
+        # Manual refresh option
+        if st.button("🔄 Refresh Analytics", key="refresh_analytics_btn"):
+            try:
+                st.rerun()
+            except Exception:
+                try:
+                    st.experimental_rerun()
+                except Exception:
+                    pass
 
         st.markdown("---")
 
@@ -1263,4 +1337,6 @@ if __name__ == "__main__":
     
     # Run the Streamlit interface
     main()
+
+
 
