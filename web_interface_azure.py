@@ -765,7 +765,12 @@ def teacher_dashboard():
         if st.button("📊 View Statistics", key="teacher_stats_btn", help="View system statistics and usage"):
             show_statistics_direct()
         
-        # Chat management (moved to Quick Actions panel)\n# System info
+        # Chat management
+        if st.button(" Clear All Chats", key="teacher_clear_all_btn", help="Clear all chat histories"):
+            st.session_state.chat_history = []
+            st.success("All chat histories cleared!")
+        
+        # System info
         st.markdown("---")
         st.subheader("ℹ️ System Info")
         st.info(f"🔑 Role: Teacher (Admin Access)")
@@ -827,9 +832,9 @@ def teacher_dashboard():
         
         # Quick actions
         st.subheader("🚀 Quick Actions")
-        if st.button("??? Clear All Chats", key="teacher_clear_all_btn", help="Clear all chat histories"):
-            st.session_state.chat_history = []
-            st.success("All chat histories cleared!")
+        if st.button("🔄 Refresh System", key="refresh_btn"):
+            st.rerun()
+        
         if st.button("📋 Export Logs", key="export_logs_btn"):
             if st.session_state.chat_history:
                 logs = json.dumps(st.session_state.chat_history, indent=2)
@@ -1042,7 +1047,7 @@ def student_interface():
         pass
     # My Progress section (consolidated)
     st.markdown("---")
-    st.subheader("?? My Progress")
+    st.subheader("My Progress")
     progress_path = _progress_file_path()
     if not os.path.exists(progress_path):
         st.info("No progress data available yet.")
@@ -1079,6 +1084,9 @@ def student_interface():
                         st.caption("Quiz score history")
                         st.line_chart(series.set_axis(hist['timestamp']))
                     except Exception:
+                        pass
+        except Exception as e:
+            st.warning(f"Unable to load progress: {str(e)}")
                         pass
         except Exception as e:
             st.warning(f"Unable to load progress: {str(e)}")
@@ -1317,7 +1325,6 @@ if __name__ == "__main__":
     
     # Run the Streamlit interface
     main()
-
 
 
 
